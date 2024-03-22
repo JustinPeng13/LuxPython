@@ -329,7 +329,7 @@ class AgentPolicy(AgentWithModel):
                                 (key == "city" and city_tile is not None) or
                                 (unit is not None and str(unit.type) == key and len(game.map.get_cell_by_pos(unit.pos).units) <= 1 )
                         ):
-                            # Filter out the current unit from the closest-search
+                            # Filter out the current unit from the closest-search of same unit type
                             closest_index = closest_node((pos.x, pos.y), self.object_nodes[key])
                             filtered_nodes = np.delete(self.object_nodes[key], closest_index, axis=0)
                         else:
@@ -337,7 +337,7 @@ class AgentPolicy(AgentWithModel):
 
                         if len(filtered_nodes) == 0:
                             # No other object of this type
-                            obs[observation_index + 5] = 1.0
+                            obs[observation_index + 5] = 1.0  # Distance to nearest = max
                         else:
                             # There is another object of this type
                             closest_index = distance_function((pos.x, pos.y), filtered_nodes)
@@ -355,7 +355,7 @@ class AgentPolicy(AgentWithModel):
                                 }
                                 obs[observation_index + mapping[direction]] = 1.0  # One-hot encoding direction
 
-                                # 0 to 1 distance
+                                # 0 to 1 distance (max 20 tiles)
                                 distance = pos.distance_to(closest_position)
                                 obs[observation_index + 5] = min(distance / 20.0, 1.0)
 
@@ -369,7 +369,7 @@ class AgentPolicy(AgentWithModel):
                                     )
                                 elif key in [Constants.RESOURCE_TYPES.WOOD, Constants.RESOURCE_TYPES.COAL,
                                              Constants.RESOURCE_TYPES.URANIUM]:
-                                    # Resource amount
+                                    # Resource amount (max 500 units)
                                     obs[observation_index + 6] = min(
                                         game.map.get_cell_by_pos(closest_position).resource.amount / 500,
                                         1.0
@@ -433,15 +433,15 @@ class AgentPolicy(AgentWithModel):
         try:
             x = None
             y = None
-            if city_tile is not None:
+            if city_tile:
                 x = city_tile.pos.x
                 y = city_tile.pos.y
-            elif unit is not None:
+            elif unit:
                 x = unit.pos.x
                 y = unit.pos.y
             
-            if city_tile != None:
-                action =  self.actions_cities[action_code%len(self.actions_cities)](
+            if city_tile:
+                action = self.actions_cities[action_code % len(self.actions_cities)](
                     game=game,
                     unit_id=unit.id if unit else None,
                     unit=unit,
@@ -452,7 +452,7 @@ class AgentPolicy(AgentWithModel):
                     y=y
                 )
             else:
-                action =  self.actions_units[action_code%len(self.actions_units)](
+                action = self.actions_units[action_code % len(self.actions_units)](
                     game=game,
                     unit_id=unit.id if unit else None,
                     unit=unit,
