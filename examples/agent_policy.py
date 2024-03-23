@@ -120,14 +120,14 @@ class AgentPolicy(AgentWithModel):
             partial(MoveAction, direction=Constants.DIRECTIONS.WEST),
             partial(MoveAction, direction=Constants.DIRECTIONS.SOUTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.EAST),
-            partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.CART), # Transfer to nearby cart
+            # partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.CART), # Transfer to nearby cart
             partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.WORKER), # Transfer to nearby worker
             SpawnCityAction,
-            PillageAction,
+            # PillageAction,
         ]
         self.actions_cities = [
             SpawnWorkerAction,
-            SpawnCartAction,
+            # SpawnCartAction,
             ResearchAction,
         ]
         self.action_space = spaces.Discrete(max(len(self.actions_units), len(self.actions_cities)))
@@ -489,6 +489,7 @@ class AgentPolicy(AgentWithModel):
         """
         self.units_last = 0
         self.city_tiles_last = 0
+        self.cities_last = 0
         self.fuel_collected_last = 0
 
     def get_reward(self, game, is_game_finished, is_new_turn, is_game_error):
@@ -527,18 +528,22 @@ class AgentPolicy(AgentWithModel):
         rewards = {}
         
         # Give a reward for unit creation/death. 0.05 reward per unit.
-        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.05
+        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.07
         self.units_last = unit_count
 
         # Give a reward for city creation/death. 0.1 reward per city.
-        rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.1
+        rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.12
         self.city_tiles_last = city_tile_count
+
+        # Penalty for separate cities
+        rewards["rew/r_cities"] = (self.cities_last - city_count) * 0.12
+        self.cities_last = city_count
 
         # Reward collecting fuel
         fuel_collected = game.stats["teamStats"][self.team]["fuelGenerated"]
-        rewards["rew/r_fuel_collected"] = ( (fuel_collected - self.fuel_collected_last) / 20000 )
+        rewards["rew/r_fuel_collected"] = ( (fuel_collected - self.fuel_collected_last) / 10000 )
         self.fuel_collected_last = fuel_collected
-        
+
         # Give a reward of 1.0 per city tile alive at the end of the game
         rewards["rew/r_city_tiles_end"] = 0
         if is_game_finished:

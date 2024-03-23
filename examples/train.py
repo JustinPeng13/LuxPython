@@ -44,10 +44,11 @@ def get_command_line_arguments():
     parser.add_argument('--gamma', help='Gamma', type=float, default=0.995)
     parser.add_argument('--gae_lambda', help='GAE Lambda', type=float, default=0.95)
     parser.add_argument('--batch_size', help='batch_size', type=int, default=2048)  # 64
-    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=500000)
+    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=10000000)
     parser.add_argument('--n_steps', help='Number of experiences to gather before each learning period', type=int, default=2048)
     parser.add_argument('--path', help='Path to a checkpoint to load to resume training', type=str, default=None)
     parser.add_argument('--n_envs', help='Number of parallel environments to use in training', type=int, default=1)
+    # parser.add_argument('--device', help='Device to use in training', type=str, default="cuda")
     args = parser.parse_args()
 
     return args
@@ -84,6 +85,7 @@ def train(args):
     print("Run id %s" % run_id)
 
     if args.path:
+        print('using previous args', args, args.path)
         # by default previous model params are used (lr, batch size, gamma...)
         model = PPO.load(args.path)
         model.set_env(env=env)
@@ -93,6 +95,7 @@ def train(args):
 
         # TODO: Update other training parameters
     else:
+        print('using new args', args)
         model = PPO("MlpPolicy",
                     env,
                     verbose=1,
@@ -101,7 +104,8 @@ def train(args):
                     gamma=args.gamma,
                     gae_lambda=args.gae_lambda,
                     batch_size=args.batch_size,
-                    n_steps=args.n_steps
+                    n_steps=args.n_steps,
+                    device="cpu"
                     )
 
     
@@ -112,7 +116,7 @@ def train(args):
     player_replay = AgentPolicy(mode="inference", model=model)
     callbacks.append(
         SaveReplayAndModelCallback(
-                                save_freq=100000,
+                                save_freq=1000000,
                                 save_path='./models/',
                                 name_prefix=f'model{run_id}',
                                 replay_env=LuxEnvironment(
@@ -165,7 +169,7 @@ def train(args):
             obs = env.reset()
     print("Done")
 
-    '''
+    
     # Learn with self-play against the learned model as an opponent now
     print("Training model with self-play against last version of model...")
     player = AgentPolicy(mode="train")
@@ -183,7 +187,7 @@ def train(args):
     model.learn(total_timesteps=2000)
     env.close()
     print("Done")
-    '''
+    
 
 
 if __name__ == "__main__":
