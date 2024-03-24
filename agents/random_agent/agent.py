@@ -124,6 +124,7 @@ class RandomAgent(Agent):
         Returns: Array of actions to perform.
         """
         actions = []
+        actions_validated = []
 
         units = game.state["teamStates"][team]["units"].values()
         for unit in units:
@@ -137,7 +138,8 @@ class RandomAgent(Agent):
                                       team=team,
                                       x=unit.pos.x,
                                       y=unit.pos.y)
-                if action.is_valid(game, actions):
+                if action.is_valid(game, actions_validated):
+                    actions_validated.append(action)
                     unit_actions.append(action)
             if unit_actions:
                 actions.append(random.choice(unit_actions))
@@ -157,7 +159,8 @@ class RandomAgent(Agent):
                                               team=team,
                                               x=city_tile.pos.x,
                                               y=city_tile.pos.y)
-                        if action.is_valid(game, actions):
+                        if action.is_valid(game, actions_validated):
+                            actions_validated.append(action)
                             city_actions.append(action)
                     if city_actions:
                         actions.append(random.choice(city_actions))
