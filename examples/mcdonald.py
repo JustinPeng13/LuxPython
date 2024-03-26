@@ -99,38 +99,44 @@ def smart_transfer_to_nearby(game, team, unit_id, unit, target_type_restriction=
     
     return TransferAction(team, unit_id, target_unit_id, resource_type, resource_amount)
 
-########################################################################################################################
-# This is the Agent that you need to design for the competition
-########################################################################################################################
-class AgentPolicy(AgentWithModel):
+# ########################################################################################################################
+# # This is the Agent that you need to design for the competition
+# ########################################################################################################################
+class AgentPolicy(Agent):
     def __init__(self, mode="train", model=None) -> None:
         """
         Arguments:
             mode: "train" or "inference", which controls if this agent is for training or not.
             model: The pretrained model, or if None it will operate in training mode.
         """
-        super().__init__(mode, model)
+        super().__init__()
+        self.model = model
+        self.mode = mode
+        
+        self.stats = None
+        self.stats_last_game = None
 
         # Define action and observation space
         # They must be gym.spaces objects
         # Example when using discrete actions:
-        self.actions_units = [
+        self.actionSpaceMapUnits = [
             partial(MoveAction, direction=Constants.DIRECTIONS.CENTER),  # This is the do-nothing action
             partial(MoveAction, direction=Constants.DIRECTIONS.NORTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.WEST),
             partial(MoveAction, direction=Constants.DIRECTIONS.SOUTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.EAST),
-            # partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.CART), # Transfer to nearby cart
-            partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.WORKER), # Transfer to nearby worker
+            smart_transfer_to_nearby, # Transfer to nearby
             SpawnCityAction,
-            # PillageAction,
+            #PillageAction,
         ]
-        self.actions_cities = [
+        self.actionSpaceMapCities = [
             SpawnWorkerAction,
-            # SpawnCartAction,
+            SpawnCartAction,
             ResearchAction,
         ]
-        self.action_space = spaces.Discrete(max(len(self.actions_units), len(self.actions_cities)))
+
+        self.action_space = spaces.Discrete(max(len(self.actionSpaceMapUnits), len(self.actionSpaceMapCities)))
+        
 
         # Observation space: (Basic minimum for a miner agent)
         # Object:
@@ -329,7 +335,7 @@ class AgentPolicy(AgentWithModel):
                                 (key == "city" and city_tile is not None) or
                                 (unit is not None and str(unit.type) == key and len(game.map.get_cell_by_pos(unit.pos).units) <= 1 )
                         ):
-                            # Filter out the current unit from the closest-search of same unit type
+                            # Filter out the current unit from the closest-search
                             closest_index = closest_node((pos.x, pos.y), self.object_nodes[key])
                             filtered_nodes = np.delete(self.object_nodes[key], closest_index, axis=0)
                         else:
@@ -337,7 +343,7 @@ class AgentPolicy(AgentWithModel):
 
                         if len(filtered_nodes) == 0:
                             # No other object of this type
-                            obs[observation_index + 5] = 1.0  # Distance to nearest = max
+                            obs[observation_index + 5] = 1.0
                         else:
                             # There is another object of this type
                             closest_index = distance_function((pos.x, pos.y), filtered_nodes)
@@ -355,7 +361,7 @@ class AgentPolicy(AgentWithModel):
                                 }
                                 obs[observation_index + mapping[direction]] = 1.0  # One-hot encoding direction
 
-                                # 0 to 1 distance (max 20 tiles)
+                                # 0 to 1 distance
                                 distance = pos.distance_to(closest_position)
                                 obs[observation_index + 5] = min(distance / 20.0, 1.0)
 
@@ -369,7 +375,7 @@ class AgentPolicy(AgentWithModel):
                                     )
                                 elif key in [Constants.RESOURCE_TYPES.WOOD, Constants.RESOURCE_TYPES.COAL,
                                              Constants.RESOURCE_TYPES.URANIUM]:
-                                    # Resource amount (max 500 units)
+                                    # Resource amount
                                     obs[observation_index + 6] = min(
                                         game.map.get_cell_by_pos(closest_position).resource.amount / 500,
                                         1.0
@@ -426,22 +432,22 @@ class AgentPolicy(AgentWithModel):
     def action_code_to_action(self, action_code, game, unit=None, city_tile=None, team=None):
         """
         Takes an action in the environment according to actionCode:
-            action_code: Index of action to take into the action array.
+            actionCode: Index of action to take into the action array.
         Returns: An action.
         """
-        # Map action_code index into to a constructed Action object
+        # Map actionCode index into to a constructed Action object
         try:
             x = None
             y = None
-            if city_tile:
+            if city_tile is not None:
                 x = city_tile.pos.x
                 y = city_tile.pos.y
-            elif unit:
+            elif unit is not None:
                 x = unit.pos.x
                 y = unit.pos.y
             
-            if city_tile:
-                action = self.actions_cities[action_code % len(self.actions_cities)](
+            if city_tile != None:
+                action =  self.actionSpaceMapCities[action_code%len(self.actionSpaceMapCities)](
                     game=game,
                     unit_id=unit.id if unit else None,
                     unit=unit,
@@ -451,8 +457,21 @@ class AgentPolicy(AgentWithModel):
                     x=x,
                     y=y
                 )
+
+                # If the city action is invalid, default to research action automatically
+                if not action.is_valid(game, actions_validated=[]):
+                    action = ResearchAction(
+                        game=game,
+                        unit_id=unit.id if unit else None,
+                        unit=unit,
+                        city_id=city_tile.city_id if city_tile else None,
+                        citytile=city_tile,
+                        team=team,
+                        x=x,
+                        y=y
+                    )
             else:
-                action = self.actions_units[action_code % len(self.actions_units)](
+                action =  self.actionSpaceMapUnits[action_code%len(self.actionSpaceMapUnits)](
                     game=game,
                     unit_id=unit.id if unit else None,
                     unit=unit,
@@ -476,10 +495,10 @@ class AgentPolicy(AgentWithModel):
         """
         action = self.action_code_to_action(action_code, game, unit, city_tile, team)
         self.match_controller.take_action(action)
-
+    
     def game_start(self, game):
         """
-        This function is called at the start of each game. Use this to
+        This funciton is called at the start of each game. Use this to
         reset and initialize per game. Note that self.team may have
         been changed since last game. The game map has been created
         and starting units placed.
@@ -487,15 +506,55 @@ class AgentPolicy(AgentWithModel):
         Args:
             game ([type]): Game.
         """
+        self.last_generated_fuel = game.stats["teamStats"][self.team]["fuelGenerated"]
+        self.last_resources_collected = copy.deepcopy(game.stats["teamStats"][self.team]["resourcesCollected"])
+        if self.stats != None:
+            self.stats_last_game =  self.stats
+        self.stats = {
+            "rew/r_total": 0,
+            "rew/r_wood": 0,
+            "rew/r_coal": 0,
+            "rew/r_uranium": 0,
+            "rew/r_research": 0,
+            "rew/r_city_tiles_end": 0,
+            "rew/r_fuel_collected":0,
+            "rew/r_units":0,
+            "rew/r_city_tiles":0,
+            "game/turns": 0,
+            "game/research": 0,
+            "game/unit_count": 0,
+            "game/cart_count": 0,
+            "game/city_count": 0,
+            "game/city_tiles": 0,
+            "game/wood_rate_mined": 0,
+            "game/coal_rate_mined": 0,
+            "game/uranium_rate_mined": 0,
+        }
+        self.is_last_turn = False
+
+        # Calculate starting map resources
+        type_map = {
+            Constants.RESOURCE_TYPES.WOOD: "WOOD",
+            Constants.RESOURCE_TYPES.COAL: "COAL",
+            Constants.RESOURCE_TYPES.URANIUM: "URANIUM",
+        }
+
+        self.fuel_collected_last = 0
+        self.fuel_start = {}
+        self.fuel_last = {}
+        for type, type_upper in type_map.items():
+            self.fuel_start[type] = 0
+            self.fuel_last[type] = 0
+            for c in game.map.resources_by_type[type]:
+                self.fuel_start[type] += c.resource.amount * game.configs["parameters"]["RESOURCE_TO_FUEL_RATE"][type_upper]
+
+        self.research_last = 0
         self.units_last = 0
         self.city_tiles_last = 0
-        self.cities_last = 0
-        self.fuel_collected_last = 0
 
     def get_reward(self, game, is_game_finished, is_new_turn, is_game_error):
         """
-        Returns the reward function for this step of the game. Reward should be a
-        delta increment to the reward, not the total current reward.
+        Returns the reward function for this step of the game.
         """
         if is_game_error:
             # Game environment step failed, assign a game lost reward to not incentivise this
@@ -503,12 +562,18 @@ class AgentPolicy(AgentWithModel):
             return -1.0
 
         if not is_new_turn and not is_game_finished:
-            # Only apply rewards at the start of each turn or at game end
+            # Only apply rewards at the start of each turn
             return 0
 
         # Get some basic stats
-        unit_count = len(game.state["teamStates"][self.team]["units"])
+        unit_count = len(game.state["teamStates"][self.team % 2]["units"])
+        cart_count = 0
+        for id, u in game.state["teamStates"][self.team % 2]["units"].items():
+            if u.type == Constants.UNIT_TYPES.CART:
+                cart_count += 1
 
+        unit_count_opponent = len(game.state["teamStates"][(self.team + 1) % 2]["units"])
+        research = min(game.state["teamStates"][self.team]["researchPoints"], 200.0) # Cap research points at 200
         city_count = 0
         city_count_opponent = 0
         city_tile_count = 0
@@ -525,56 +590,114 @@ class AgentPolicy(AgentWithModel):
                 else:
                     city_tile_count_opponent += 1
         
+        # Basic stats
+        self.stats["game/research"] = research
+        self.stats["game/city_tiles"] = city_tile_count
+        self.stats["game/city_count"] = city_count
+        self.stats["game/unit_count"] = unit_count
+        self.stats["game/cart_count"] = cart_count
+        self.stats["game/turns"] = game.state["turn"]
+
         rewards = {}
+
+        # Give up to 1.0 reward for each resource based on % of total mined.
+        type_map = {
+            Constants.RESOURCE_TYPES.WOOD: "WOOD",
+            Constants.RESOURCE_TYPES.COAL: "COAL",
+            Constants.RESOURCE_TYPES.URANIUM: "URANIUM",
+        }
+        fuel_now = {}
+        for type, type_upper in type_map.items():
+            fuel_now = game.stats["teamStats"][self.team]["resourcesCollected"][type] * game.configs["parameters"]["RESOURCE_TO_FUEL_RATE"][type_upper]
+            rewards["rew/r_%s" % type] = (fuel_now - self.fuel_last[type]) / self.fuel_start[type]
+            self.stats["game/%s_rate_mined" % type] = fuel_now / self.fuel_start[type]
+            self.fuel_last[type] = fuel_now
         
-        # Give a reward for unit creation/death. 0.05 reward per unit.
-        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.07
-        self.units_last = unit_count
-
-        # Give a reward for city creation/death. 0.1 reward per city.
-        rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.12
-        self.city_tiles_last = city_tile_count
-
-        # Penalty for separate cities
-        rewards["rew/r_cities"] = (self.cities_last - city_count) * 0.12
-        self.cities_last = city_count
-
-        # Reward collecting fuel
+        # Give more incentive for coal and uranium
+        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.COAL] *= 2
+        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.URANIUM] *= 4
+        
+        # Give a reward based on amount of fuel collected. 1.0 reward for each 20K fuel gathered.
         fuel_collected = game.stats["teamStats"][self.team]["fuelGenerated"]
-        rewards["rew/r_fuel_collected"] = ( (fuel_collected - self.fuel_collected_last) / 10000 )
+        rewards["rew/r_fuel_collected"] = ( (fuel_collected - self.fuel_collected_last) / 20000 )
         self.fuel_collected_last = fuel_collected
 
-        # Give a reward of 1.0 per city tile alive at the end of the game
+        # Give a reward for unit creation/death. 0.05 reward per unit.
+        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.05
+        self.units_last = unit_count
+
+        # Give a reward for unit creation/death. 0.1 reward per city.
+        rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.1
+        self.city_tiles_last = city_tile_count
+
+        # Tiny reward for research to help. Up to 0.5 reward for this.
+        rewards["rew/r_research"] = (research - self.research_last) / (200 * 2)
+        self.research_last = research
+        
+        # Give a reward up to around 50.0 based on number of city tiles at the end of the game
         rewards["rew/r_city_tiles_end"] = 0
         if is_game_finished:
             self.is_last_turn = True
             rewards["rew/r_city_tiles_end"] = city_tile_count
-
-            '''
-            # Example of a game win/loss reward instead
-            if game.get_winning_team() == self.team:
-                rewards["rew/r_game_win"] = 100.0 # Win
-            else:
-                rewards["rew/r_game_win"] = -100.0 # Loss
-            '''
         
+        
+        # Update the stats and total reward
         reward = 0
         for name, value in rewards.items():
+            self.stats[name] += value
             reward += value
+        self.stats["rew/r_total"] += reward
+
+        # Print the final game stats sometimes
+        if is_game_finished and random.random() <= 0.01:
+            stats_string = []
+            for key, value in self.stats.items():
+                stats_string.append("%s=%.2f" % (key, value))
+            print("\n".join(stats_string))
+
 
         return reward
-
-    def turn_heurstics(self, game, is_first_turn):
-        """
-        This is called pre-observation actions to allow for hardcoded heuristics
-        to control a subset of units. Any unit or city that gets an action from this
-        callback, will not create an observation+action.
-
-        Args:
-            game ([type]): Game in progress
-            is_first_turn (bool): True if it's the first turn of a game.
-        """
-        return
-
+        
     
 
+    def process_turn(self, game, team):
+        """
+        Decides on a set of actions for the current turn. Not used in training, only inference.
+        Returns: Array of actions to perform.
+        """
+        start_time = time.time()
+        actions = []
+        new_turn = True
+
+        # Inference the model per-unit
+        units = game.state["teamStates"][team]["units"].values()
+        for unit in units:
+            if unit.can_act():
+                obs = self.get_observation(game, unit, None, unit.team, new_turn)
+                action_code, _states = self.model.predict(obs, deterministic=False)
+                if action_code is not None:
+                    actions.append(
+                        self.action_code_to_action(action_code, game=game, unit=unit, city_tile=None, team=unit.team))
+                new_turn = False
+
+        # Inference the model per-city
+        cities = game.cities.values()
+        for city in cities:
+            if city.team == team:
+                for cell in city.city_cells:
+                    city_tile = cell.city_tile
+                    if city_tile.can_act():
+                        obs = self.get_observation(game, None, city_tile, city.team, new_turn)
+                        action_code, _states = self.model.predict(obs, deterministic=False)
+                        if action_code is not None:
+                            actions.append(
+                                self.action_code_to_action(action_code, game=game, unit=None, city_tile=city_tile,
+                                                           team=city.team))
+                        new_turn = False
+
+        time_taken = time.time() - start_time
+        if time_taken > 0.5:  # Warn if larger than 0.5 seconds.
+            print("WARNING: Inference took %.3f seconds for computing actions. Limit is 1 second." % time_taken,
+                  file=sys.stderr)
+
+        return actions
