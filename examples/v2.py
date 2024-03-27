@@ -143,17 +143,17 @@ class AgentPolicy(AgentWithModel):
             #     smart_transfer_to_nearby,
             #     target_type_restriction=Constants.UNIT_TYPES.CART,
             # ),  # Transfer to nearby cart
-            # partial(
-            #     smart_transfer_to_nearby,
-            #     target_type_restriction=Constants.UNIT_TYPES.WORKER,
-            # ),  # Transfer to nearby worker
+            partial(
+                smart_transfer_to_nearby,
+                target_type_restriction=Constants.UNIT_TYPES.WORKER,
+            ),  # Transfer to nearby worker
             SpawnCityAction,
             # PillageAction,
         ]
         self.actions_cities = [
             SpawnWorkerAction,
             # SpawnCartAction,
-            # ResearchAction,
+            ResearchAction,
         ]
         self.action_space = spaces.Discrete(
             max(len(self.actions_units), len(self.actions_cities))
@@ -448,7 +448,7 @@ class AgentPolicy(AgentWithModel):
                             obs[observation_index + 5] = min(distance / 20.0, 1.0)
 
                             # 0 to 1 value (amount of resource, cargo for unit, or fuel for city)
-                            if key == "city":
+                            if "city" in key:
                                 # City fuel as % of upkeep for 200 turns
                                 c = game.cities[
                                     game.map.get_cell_by_pos(
@@ -656,37 +656,18 @@ class AgentPolicy(AgentWithModel):
                 Constants.RESOURCE_TYPES.WOOD
             ]
             / self.total_resources[Constants.RESOURCE_TYPES.WOOD]
-            * 0.6
+            * 0.5
             + game.stats["teamStats"][self.team]["resourcesCollected"][
                 Constants.RESOURCE_TYPES.COAL
             ]
             / self.total_resources[Constants.RESOURCE_TYPES.COAL]
-            * 0.3
-            + game.stats["teamStats"][self.team]["resourcesCollected"][
-                Constants.RESOURCE_TYPES.URANIUM
-            ]
-            / self.total_resources[Constants.RESOURCE_TYPES.URANIUM]
-            * 0.1
+            * 0.5
+            # + game.stats["teamStats"][self.team]["resourcesCollected"][
+            #     Constants.RESOURCE_TYPES.URANIUM
+            # ]
+            # / self.total_resources[Constants.RESOURCE_TYPES.URANIUM]
+            # * 0.0
         )
-
-        # # Give a reward for unit creation/death. 0.05 reward per unit.
-        # rewards["rew/r_units"] = (unit_count - self.units_last) * 0.075
-        # self.units_last = unit_count
-
-        # # Give a reward for city creation/death. 0.1 reward per city.
-        # rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.1
-        # self.city_tiles_last = city_tile_count
-
-        # # Penalty for separate cities
-        # rewards["rew/r_cities"] = (self.cities_last - city_count) * 0.1
-        # self.cities_last = city_count
-
-        # # Reward collecting fuel
-        # fuel_collected = game.stats["teamStats"][self.team]["fuelGenerated"]
-        # rewards["rew/r_fuel_collected"] = (
-        #     fuel_collected - self.fuel_collected_last
-        # ) / 20000
-        # self.fuel_collected_last = fuel_collected
 
         # Give a reward of 1.0 per city tile alive at the end of the game
         rewards["rew/r_city_tiles_end"] = 0
@@ -701,24 +682,27 @@ class AgentPolicy(AgentWithModel):
                     10 * game.state["turn"] / GAME_CONSTANTS["PARAMETERS"]["MAX_DAYS"]
                 )  # Win
             else:
-                rewards["rew/r_game_win"] = -10  # Loss
-
-            if random.random() < 0.012:
+                rewards["rew/r_game_win"] = -10 * (
+                    4 - game.state["turn"] / GAME_CONSTANTS["PARAMETERS"]["MAX_DAYS"]
+                )  # Loss
+            if random.randint(0, 99) < 5:
                 print(
                     f"Game win: {game.get_winning_team() == self.team}\n \
                     Number of rounds: {game.state['turn']}\n \
                     Number of units: {unit_count}\n \
-                      Farming score: {farm_score * 10000}\n \
-                        City survival score: {city_survival_score}\n \
-                        City tiles: {city_tile_count} \
-                        City tile score: {rewards['rew/r_city_tiles_end']}"
+                    Farming score: {farm_score * 100}\n \
+                    City survival score: {city_survival_score}\n \
+                    City tiles: {city_tile_count}\n \
+                    City tile score: {rewards['rew/r_city_tiles_end']} \n \
+                    Game win score: {rewards['rew/r_game_win']}\n \
+                    Total score: {farm_score * 100 + city_survival_score + rewards['rew/r_game_win'] + rewards['rew/r_city_tiles_end']}\n"
                 )
 
         # reward = 0
         # for name, value in rewards.items():
         #     reward += value
         curr_score = (
-            farm_score * 10000
+            farm_score * 100
             + city_survival_score
             + rewards["rew/r_game_win"]
             + rewards["rew/r_city_tiles_end"]

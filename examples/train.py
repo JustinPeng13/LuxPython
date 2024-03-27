@@ -10,8 +10,9 @@ from stable_baselines3.common.utils import set_random_seed, get_schedule_fn
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 # from agent_policy_old import AgentPolicy as AgentPolicyOld
-from rliayn import AgentPolicy
-# from mcdonald import AgentPolicy as McDonaldPolicy
+from v1 import AgentPolicy as AgentPolicyV1
+from v2 import AgentPolicy as AgentPolicy
+# from mcdonald import AgentPolicy
 from random_agent import RandomAgent
 from luxai2021.env.agent import Agent
 from luxai2021.env.lux_env import LuxEnvironment, SaveReplayAndModelCallback
@@ -96,9 +97,9 @@ def train(args):
     configs = LuxMatchConfigs_Default
 
     # Create a default opponent agent
-    # opp_model = PPO.load(f"models/rl_model_test_10000000_steps.zip")
-    # opponent = AgentPolicy(mode="inference", model=opp_model)
-    opponent = Agent()
+    opp_model = PPO.load(f"models/rl_model_v1_10000000_steps.zip")
+    opponent = AgentPolicyV1(mode="inference", model=opp_model)
+    # opponent = Agent()
 
     # Create a RL agent in training mode
     player = AgentPolicy(mode="train")
@@ -157,7 +158,7 @@ def train(args):
     player_replay = AgentPolicy(mode="inference", model=model)
     callbacks.append(
         SaveReplayAndModelCallback(
-            save_freq=20000,
+            save_freq=2000000,
             save_path="./models/",
             name_prefix=f"{run_id}",
             replay_env=LuxEnvironment(
