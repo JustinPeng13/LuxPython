@@ -139,10 +139,10 @@ class AgentPolicy(AgentWithModel):
             partial(MoveAction, direction=Constants.DIRECTIONS.WEST),
             partial(MoveAction, direction=Constants.DIRECTIONS.SOUTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.EAST),
-            # partial(
-            #     smart_transfer_to_nearby,
-            #     target_type_restriction=Constants.UNIT_TYPES.CART,
-            # ),  # Transfer to nearby cart
+            partial(
+                smart_transfer_to_nearby,
+                target_type_restriction=Constants.UNIT_TYPES.CART,
+            ),  # Transfer to nearby cart
             partial(
                 smart_transfer_to_nearby,
                 target_type_restriction=Constants.UNIT_TYPES.WORKER,
@@ -152,7 +152,7 @@ class AgentPolicy(AgentWithModel):
         ]
         self.actions_cities = [
             SpawnWorkerAction,
-            # SpawnCartAction,
+            SpawnCartAction,
             ResearchAction,
         ]
         self.action_space = spaces.Discrete(
@@ -163,6 +163,7 @@ class AgentPolicy(AgentWithModel):
         # Object:
         #   1x is worker
         #   1x is citytile
+        #   1x is cart
         #
         #   1x cooldown %
         #   1x wood cargo %
@@ -196,12 +197,17 @@ class AgentPolicy(AgentWithModel):
         #   5x direction_nearest_worker
         #   1x distance_nearest_worker
         #   1x amount of cargo
+        #
+        #   5x direction_nearest_cart
+        #   1x distance_nearest_cart
+        #   1x amount of cargo
         # State:
         #   1x is night
         #   1x turn in day/night cycle
         #   1x percent of game done
         #   1x citytile counts [cur player]
         #   1x worker counts [cur player]
+        #   1x cart counts [cur player]
         #   1x research points [cur player]
         #   1x can farm coal [cur player]
         #   1x can farm uranium [cur player]
@@ -209,7 +215,7 @@ class AgentPolicy(AgentWithModel):
         #   1x % wood left
         #   1x % coal left
         #   1x % uranium left
-        self.observation_shape = (2 + 8 + 7 * 6 + 8 + 3,)  # total 63
+        self.observation_shape = (3 + 8 + 7 * 7 + 9 + 3,)  # total 72
         self.observation_space = spaces.Box(
             low=0, high=1, shape=self.observation_shape, dtype=np.float32
         )
@@ -311,12 +317,15 @@ class AgentPolicy(AgentWithModel):
         # Unit/City:
         #   1x is worker
         #   1x is citytile
+        #   1x is cart
         observation_index = 0
         if unit and unit.is_worker():
             obs[observation_index] = 1.0
         elif city_tile:
             obs[observation_index + 1] = 1.0
-        observation_index += 2
+        elif unit and unit.is_cart():
+            obs[observation_index + 2] = 1.0
+        observation_index += 3
 
         #   1x cooldown %
         #   1x wood cargo %
@@ -329,10 +338,16 @@ class AgentPolicy(AgentWithModel):
         if unit:
             pos = unit.pos
 
-            obs[observation_index] = (
-                unit.cooldown
-                / GAME_CONSTANTS["PARAMETERS"]["UNIT_ACTION_COOLDOWN"]["WORKER"]
-            )
+            if unit.is_worker():
+                obs[observation_index] = (
+                    unit.cooldown
+                    / GAME_CONSTANTS["PARAMETERS"]["UNIT_ACTION_COOLDOWN"]["WORKER"]
+                )
+            else:
+                obs[observation_index] = (
+                    unit.cooldown
+                    / GAME_CONSTANTS["PARAMETERS"]["UNIT_ACTION_COOLDOWN"]["CART"]
+                )
             obs[observation_index + 1] = (
                 unit.cargo[Constants.RESOURCE_TYPES.WOOD] / 100.0
             )
@@ -389,7 +404,7 @@ class AgentPolicy(AgentWithModel):
             observation_index += 8
 
         else:
-            observation_index += 50  # Skip the rest of the unit/city observations
+            observation_index += 57  # Skip the rest of the unit/city observations
 
         if pos:
             for key in [
@@ -399,6 +414,7 @@ class AgentPolicy(AgentWithModel):
                 "city",
                 "dying_city",
                 str(Constants.UNIT_TYPES.WORKER),
+                str(Constants.UNIT_TYPES.CART),
             ]:
                 # Process the direction to and distance to this object type
 
@@ -493,10 +509,10 @@ class AgentPolicy(AgentWithModel):
         #   1x percent of game done
         #   1x citytile counts [cur player]
         #   1x worker counts [cur player]
+        #   1x cart counts [cur player]
         #   1x research points [cur player]
         #   1x can farm coal [cur player]
         #   1x can farm uranium [cur player]
-        #   1x is night
         obs[observation_index] = game.is_night()
         obs[observation_index + 1] = game.state["turn"] % 40 / 39
         obs[observation_index + 2] = (
@@ -508,18 +524,21 @@ class AgentPolicy(AgentWithModel):
         obs[observation_index + 4] = (
             len(self.object_nodes.get(str(Constants.UNIT_TYPES.WORKER), [])) / max_count
         )
-
         obs[observation_index + 5] = (
+            len(self.object_nodes.get(str(Constants.UNIT_TYPES.CART), [])) / max_count
+        )
+
+        obs[observation_index + 6] = (
             game.state["teamStates"][team]["researchPoints"] / 200.0
         )
-        obs[observation_index + 6] = float(
+        obs[observation_index + 7] = float(
             game.state["teamStates"][team]["researched"]["coal"]
         )
-        obs[observation_index + 7] = float(
+        obs[observation_index + 8] = float(
             game.state["teamStates"][team]["researched"]["uranium"]
         )
 
-        observation_index += 8
+        observation_index += 9
 
         # Map:
         #   1x % wood left
@@ -690,7 +709,7 @@ class AgentPolicy(AgentWithModel):
                     f"Game win: {game.get_winning_team() == self.team}\n \
                     Number of rounds: {game.state['turn']}\n \
                     Number of units: {unit_count}\n \
-                    Farming score: {farm_score * 100}\n \
+                    Farming score: {farm_score * 5000}\n \
                     City survival score: {city_survival_score}\n \
                     City tiles: {city_tile_count}\n \
                     City tile score: {rewards['rew/r_city_tiles_end']} \n \
@@ -702,7 +721,7 @@ class AgentPolicy(AgentWithModel):
         # for name, value in rewards.items():
         #     reward += value
         curr_score = (
-            farm_score * 100
+            farm_score * 5000
             + city_survival_score
             + rewards["rew/r_game_win"]
             + rewards["rew/r_city_tiles_end"]
