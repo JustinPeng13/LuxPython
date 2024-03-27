@@ -143,8 +143,9 @@ class RuleBasedAgent(Agent):
 
     def get_direction_to_closest_resource(self, unit):
         closest_resource = self.get_closest_resource(unit)
-        direction = unit.pos.direction_to(closest_resource.pos)
-        return direction
+        if not closest_resource:
+            return None
+        return unit.pos.direction_to(closest_resource.pos)
 
     def process_turn(self, game, team):
         """
@@ -169,7 +170,7 @@ class RuleBasedAgent(Agent):
 
             if unit.get_cargo_space_left() > 0 and random.random() < 0.5: # decide whether to move to resource
                 direction = self.get_direction_to_closest_resource(unit)
-                if direction != 'c':
+                if direction and direction != 'c':
                     action = self.move_action_makers[direction](game=game,
                                                                 unit_id=unit.id,
                                                                 unit=unit,
@@ -219,5 +220,6 @@ class RuleBasedAgent(Agent):
                                 actions.append(action)
                                 break
 
-        print(actions)
+        # print(actions)
+        # print(len(units))
         return actions
