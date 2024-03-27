@@ -544,6 +544,25 @@ class AgentPolicy(AgentWithModel):
         rewards["rew/r_fuel_collected"] = ( (fuel_collected - self.fuel_collected_last) / 10000 )
         self.fuel_collected_last = fuel_collected
 
+        # Penalise collecting fuel cause it results in pollution and global warming (final penalty)
+        # AIR POLLUTION - coal > wood > uranium <Assumption>
+        ap = {'coal': 0.75, 'wood': 0.505, 'uranium': 0.25}
+        # EXCAVATION (SECONDARY POLLUTION) -  uranium > coal > wood
+        sp = {'coal': 0.75, 'wood': 0.345, 'uranium': 0.85}
+        pollution_generated = game.stats["teamStats"][self.team]["pollutionGenerated"]
+        rewards["rew/r_fuel_pollution_primary"] = 0
+        self.fuel_collected_last = 0
+        #alpha/beta relative weightage of primary vs secondary pollution
+        alpha = 0.65
+        beta = 0.35
+        if is_game_finished:
+            self.is_last_turn = True
+            wood_used = game.stats["teamStats"][self.team]["resourcesCollected"]["wood"]
+            uranium_used = game.stats["teamStats"][self.team]["resourcesCollected"]["uranium"]
+            coal_used = game.stats["teamStats"][self.team]["resourcesCollected"]["coal"]
+            rewards["rew/r_fuel_pollution_primary"] = alpha*(wood_used*ap["wood"]+coal_used*ap["coal"]+uranium_used*ap["uranium"]) \
+                                                      + beta*(wood_used*sp["wood"]+coal_used*sp["coal"]+uranium_used*sp["uranium"])
+
         # Give a reward of 1.0 per city tile alive at the end of the game
         rewards["rew/r_city_tiles_end"] = 0
         if is_game_finished:
