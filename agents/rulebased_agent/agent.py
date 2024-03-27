@@ -95,27 +95,23 @@ class RuleBasedAgent(Agent):
         super().__init__()
 
         self.actions_units = [
-            partial(MoveAction, direction=Constants.DIRECTIONS.CENTER),  # This is the do-nothing action
+            # Ordered by priority from highest to lowest
+            PillageAction,
+            SpawnCityAction,
             partial(MoveAction, direction=Constants.DIRECTIONS.NORTH),
-            partial(MoveAction, direction=Constants.DIRECTIONS.WEST),
             partial(MoveAction, direction=Constants.DIRECTIONS.SOUTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.EAST),
-            partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.CART), # Transfer to nearby cart
-            partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.WORKER), # Transfer to nearby worker
-            SpawnCityAction,
-            PillageAction,
+            partial(MoveAction, direction=Constants.DIRECTIONS.WEST),
+            partial(MoveAction, direction=Constants.DIRECTIONS.CENTER),  # This is the do-nothing action
+            # partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.CART), # Transfer to nearby cart
+            # partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.WORKER), # Transfer to nearby worker
         ]
         self.actions_cities = [
-            SpawnWorkerAction,
-            SpawnCartAction,
+            # Ordered by priority from highest to lowest
             ResearchAction,
+            # SpawnCartAction,
+            SpawnWorkerAction,
         ]
-
-    def get_agent_type(self):
-        """
-        Returns the type of agent. Use AGENT for inference, and LEARNING for training a model.
-        """
-        return Constants.AGENT_TYPE.AGENT
 
     def process_turn(self, game, team):
         """
@@ -129,9 +125,9 @@ class RuleBasedAgent(Agent):
         units = game.state["teamStates"][team]["units"].values()
         for unit in units:
             unit_actions = []
-            for action_maker in self.actions_units:
+            for index, action_maker in enumerate(self.actions_units):
                 action = action_maker(game=game,
-                                      unit_id=unit.id if unit else None,
+                                      unit_id=unit.id,
                                       unit=unit,
                                       city_id=None,
                                       citytile=None,
@@ -140,9 +136,13 @@ class RuleBasedAgent(Agent):
                                       y=unit.pos.y)
                 if action.is_valid(game, actions_validated):
                     actions_validated.append(action)
-                    unit_actions.append(action)
+                    unit_actions.append((index, action))
+
+            unit_actions.sort()
             if unit_actions:
-                actions.append(random.choice(unit_actions))
+                # select the best action by priority
+                best_action = unit_actions[0][1]
+                actions.append(best_action)
 
         cities = game.cities.values()
         for city in cities:
@@ -150,7 +150,7 @@ class RuleBasedAgent(Agent):
                 for cell in city.city_cells:
                     city_tile = cell.city_tile
                     city_actions = []
-                    for action_maker in self.actions_cities:
+                    for index, action_maker in enumerate(self.actions_cities):
                         action = action_maker(game=game,
                                               unit_id=None,
                                               unit=None,
@@ -161,8 +161,12 @@ class RuleBasedAgent(Agent):
                                               y=city_tile.pos.y)
                         if action.is_valid(game, actions_validated):
                             actions_validated.append(action)
-                            city_actions.append(action)
+                            city_actions.append((index, action))
+                    
+                    city_actions.sort()
                     if city_actions:
-                        actions.append(random.choice(city_actions))
+                        # select best action by priority
+                        best_action = city_actions[0][1]
+                        actions.append(best_action)
 
         return actions

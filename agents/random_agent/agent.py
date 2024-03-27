@@ -111,12 +111,6 @@ class RandomAgent(Agent):
             ResearchAction,
         ]
 
-    def get_agent_type(self):
-        """
-        Returns the type of agent. Use AGENT for inference, and LEARNING for training a model.
-        """
-        return Constants.AGENT_TYPE.AGENT
-
     def process_turn(self, game, team):
         """
         Decides on a set of actions for the current turn. Not used in training, only inference. Generally
