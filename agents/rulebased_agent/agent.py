@@ -96,21 +96,21 @@ class RuleBasedAgent(Agent):
 
         self.actions_units = [
             # Ordered by priority from highest to lowest
-            PillageAction,
             SpawnCityAction,
+            PillageAction,
             partial(MoveAction, direction=Constants.DIRECTIONS.NORTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.SOUTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.EAST),
             partial(MoveAction, direction=Constants.DIRECTIONS.WEST),
-            partial(MoveAction, direction=Constants.DIRECTIONS.CENTER),  # This is the do-nothing action
+            # partial(MoveAction, direction=Constants.DIRECTIONS.CENTER),  # This is the do-nothing action
             # partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.CART), # Transfer to nearby cart
             # partial(smart_transfer_to_nearby, target_type_restriction=Constants.UNIT_TYPES.WORKER), # Transfer to nearby worker
         ]
         self.actions_cities = [
             # Ordered by priority from highest to lowest
+            SpawnWorkerAction,
             ResearchAction,
             # SpawnCartAction,
-            SpawnWorkerAction,
         ]
 
     def process_turn(self, game, team):
@@ -119,6 +119,12 @@ class RuleBasedAgent(Agent):
         don't modify this part of the code.
         Returns: Array of actions to perform.
         """
+
+        # shuffle move actions
+        sublist = self.actions_units[2:]
+        random.shuffle(sublist)
+        self.actions_units[2:] = sublist
+
         actions = []
         actions_validated = []
 
@@ -136,7 +142,8 @@ class RuleBasedAgent(Agent):
                                       y=unit.pos.y)
                 if action.is_valid(game, actions_validated):
                     actions_validated.append(action)
-                    unit_actions.append((index, action))
+                    if type(action) is not PillageAction or random.random() < 0.75: # pillage at 75% chance
+                        unit_actions.append((index, action))
 
             unit_actions.sort()
             if unit_actions:
@@ -162,11 +169,12 @@ class RuleBasedAgent(Agent):
                         if action.is_valid(game, actions_validated):
                             actions_validated.append(action)
                             city_actions.append((index, action))
-                    
+
                     city_actions.sort()
                     if city_actions:
                         # select best action by priority
                         best_action = city_actions[0][1]
                         actions.append(best_action)
 
+        print(actions)
         return actions
