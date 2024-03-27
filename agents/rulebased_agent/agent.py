@@ -93,11 +93,16 @@ class RuleBasedAgent(Agent):
             model: The pretrained model, or if None it will operate in training mode.
         """
         super().__init__()
-
+        self.move_action_makers = {
+            'n' : partial(MoveAction, direction=Constants.DIRECTIONS.NORTH),
+            's' : partial(MoveAction, direction=Constants.DIRECTIONS.SOUTH),
+            'e' : partial(MoveAction, direction=Constants.DIRECTIONS.EAST),
+            'w' : partial(MoveAction, direction=Constants.DIRECTIONS.WEST)
+        }
         self.actions_units = [
             # Ordered by priority from highest to lowest
-            SpawnCityAction,
             PillageAction,
+            SpawnCityAction,
             partial(MoveAction, direction=Constants.DIRECTIONS.NORTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.SOUTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.EAST),
@@ -112,6 +117,34 @@ class RuleBasedAgent(Agent):
             ResearchAction,
             # SpawnCartAction,
         ]
+        self.researched = {'wood': True, 'coal': False, 'uranium': False}
+        self.resource_tiles = []
+
+    def get_resource_tiles(self, game_map):
+        self.resource_tiles = []
+        for y in range(game_map.height):
+            for x in range(game_map.width):
+                cell = game_map.get_cell(x, y)
+                if not cell.has_resource(): continue
+                if cell.resource.type == 'coal' and not self.researched['coal']: continue
+                if cell.resource.type == 'uranium' and not self.researched['uranium']: continue
+                self.resource_tiles.append(cell)
+        return self.resource_tiles
+
+    def get_closest_resource(self, unit):
+        closest_dist = float('inf')
+        closest_resource_tile = None
+        for resource_tile in self.resource_tiles:
+            dist = resource_tile.pos.distance_to(unit.pos)
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_resource_tile = resource_tile
+        return closest_resource_tile
+
+    def get_direction_to_closest_resource(self, unit):
+        closest_resource = self.get_closest_resource(unit)
+        direction = unit.pos.direction_to(closest_resource.pos)
+        return direction
 
     def process_turn(self, game, team):
         """
@@ -119,6 +152,8 @@ class RuleBasedAgent(Agent):
         don't modify this part of the code.
         Returns: Array of actions to perform.
         """
+        self.researched = game.state["teamStates"][team]['researched']
+        self.get_resource_tiles(game.map)
 
         # shuffle move actions
         sublist = self.actions_units[2:]
@@ -131,6 +166,23 @@ class RuleBasedAgent(Agent):
         units = game.state["teamStates"][team]["units"].values()
         for unit in units:
             unit_actions = []
+
+            if unit.get_cargo_space_left() > 0 and random.random() < 0.5: # decide whether to move to resource
+                direction = self.get_direction_to_closest_resource(unit)
+                if direction != 'c':
+                    action = self.move_action_makers[direction](game=game,
+                                                                unit_id=unit.id,
+                                                                unit=unit,
+                                                                city_id=None,
+                                                                citytile=None,
+                                                                team=team,
+                                                                x=unit.pos.x,
+                                                                y=unit.pos.y)
+                    if action.is_valid(game, actions_validated):
+                        actions_validated.append(action)
+                        actions.append(action)
+                        continue
+
             for index, action_maker in enumerate(self.actions_units):
                 action = action_maker(game=game,
                                       unit_id=unit.id,
@@ -142,14 +194,9 @@ class RuleBasedAgent(Agent):
                                       y=unit.pos.y)
                 if action.is_valid(game, actions_validated):
                     actions_validated.append(action)
-                    if type(action) is not PillageAction or random.random() < 0.75: # pillage at 75% chance
-                        unit_actions.append((index, action))
-
-            unit_actions.sort()
-            if unit_actions:
-                # select the best action by priority
-                best_action = unit_actions[0][1]
-                actions.append(best_action)
+                    if type(action) is not PillageAction or random.random() < 0.5: # pillage at x% chance
+                        actions.append(action)
+                        break
 
         cities = game.cities.values()
         for city in cities:
@@ -168,13 +215,9 @@ class RuleBasedAgent(Agent):
                                               y=city_tile.pos.y)
                         if action.is_valid(game, actions_validated):
                             actions_validated.append(action)
-                            city_actions.append((index, action))
-
-                    city_actions.sort()
-                    if city_actions:
-                        # select best action by priority
-                        best_action = city_actions[0][1]
-                        actions.append(best_action)
+                            if type(action) != ResearchAction or not self.researched['uranium']: # only research if not yet 200
+                                actions.append(action)
+                                break
 
         print(actions)
         return actions
