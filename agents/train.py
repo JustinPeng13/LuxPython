@@ -152,37 +152,21 @@ def train(args):
 
     
     # Learn with self-play against the learned model as an opponent now
-    # print("Training model with self-play against last version of model...")
-    # player = RLAgent(mode="train")
-    # opponent = RLAgent(mode="inference", model=model)
-    # env = LuxEnvironment(configs, player, opponent)
-    # model = PPO("MlpPolicy",
-    #     env,
-    #     verbose=1,
-    #     tensorboard_log="./lux_tensorboard/",
-    #     learning_rate = 0.0003,
-    #     gamma=0.999,
-    #     gae_lambda = 0.95,
-    #     device="cuda"
-    # )
+    print("Training model with self-play against last version of model...")
+    player = RLAgent(mode="train")
+    opponent = RLAgent(mode="inference", model=model)
+    env = LuxEnvironment(configs, player, opponent)
+    model = PPO("MlpPolicy",
+        env,
+        verbose=1,
+        tensorboard_log="./lux_tensorboard/",
+        learning_rate = 0.0003,
+        gamma=0.999,
+        gae_lambda = 0.95,
+        device="cuda"
+    )
 
-    # model.learn(total_timesteps=2000)
-
-    # # Save a checkpoint and 5 match replay files every 1K steps
-    # player_replay = RLAgent(mode="inference", model=model)
-    # callbacks.append(
-    #     SaveReplayAndModelCallback(
-    #         save_freq=1000,
-    #         save_path='./models/',
-    #         name_prefix=f'model{run_id}',
-    #         replay_env=LuxEnvironment(
-    #                         configs=configs,
-    #                         learning_agent=player_replay,
-    #                         opponent_agent=opponent
-    #         ),
-    #         replay_num_episodes=5
-    #     )
-    # )
+    model.learn(total_timesteps=2000)
 
     env.close()
     print("Done")
