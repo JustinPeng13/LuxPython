@@ -123,18 +123,16 @@ class RLAgent(AgentWithModel):
             partial(MoveAction, direction=Constants.DIRECTIONS.WEST),
             partial(MoveAction, direction=Constants.DIRECTIONS.SOUTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.EAST),
-            smart_transfer_to_nearby, # Transfer resource to nearby worker or cart
+            # smart_transfer_to_nearby, # Transfer resource to nearby worker or cart
             SpawnCityAction,
             # PillageAction,
         ]
         self.actionSpaceMapCities = [
             SpawnWorkerAction,
-            SpawnCartAction,
+            # SpawnCartAction,
             ResearchAction,
         ]
-
         self.action_space = spaces.Discrete(max(len(self.actionSpaceMapUnits), len(self.actionSpaceMapCities)))
-        
 
         # Observation space: (Basic minimum for a miner agent)
         # Object:
@@ -175,8 +173,7 @@ class RLAgent(AgentWithModel):
         #   1x researched coal [cur player]
         #   1x researched uranium [cur player]
         self.observation_shape = (3 + 7 * 5 * 2 + 1 + 1 + 1 + 2 + 2 + 2 + 3,)
-        self.observation_space = spaces.Box(low=0, high=1, shape=
-        self.observation_shape, dtype=np.float16)
+        self.observation_space = spaces.Box(low=0, high=1, shape=self.observation_shape, dtype=np.float16)
 
         self.object_nodes = {}
 
@@ -509,15 +506,6 @@ class RLAgent(AgentWithModel):
         if self.stats != None:
             self.stats_last_game =  self.stats
         self.stats = {
-            "rew/r_total": 0,
-            "rew/r_wood": 0,
-            "rew/r_coal": 0,
-            "rew/r_uranium": 0,
-            "rew/r_research": 0,
-            "rew/r_city_tiles_end": 0,
-            "rew/r_fuel_collected":0,
-            "rew/r_units":0,
-            "rew/r_city_tiles":0,
             "game/turns": 0,
             "game/research": 0,
             "game/unit_count": 0,
@@ -549,11 +537,41 @@ class RLAgent(AgentWithModel):
         self.units_last = 0
         self.city_count_last = 0
         self.city_tiles_last = 0
+        self.total_dist_to_resource_tiles = 0
+
+    def get_resource_tiles(self):
+        game_map = self.game.map
+        self.resource_tiles = []
+        for y in range(game_map.height):
+            for x in range(game_map.width):
+                cell = game_map.get_cell(x, y)
+                if not cell.has_resource(): continue
+                if cell.resource.type == 'coal' and self.research < 50: continue
+                if cell.resource.type == 'uranium' and self.research < 200: continue
+                self.resource_tiles.append(cell)
+        return self.resource_tiles
+
+    def get_workers(self):
+        return self.game.state["teamStates"][self.team]["units"].values()
+
+    def get_closest_worker_dist(self, resource_tile):
+        closest_dist = float('inf')
+        closest_worker = None
+        workers = self.get_workers()
+        assert len(workers) > 0
+        for worker in workers:
+            dist = resource_tile.pos.distance_to(worker.pos)
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_worker = worker
+        return closest_dist
 
     def get_reward(self, game, is_game_finished, is_new_turn, is_game_error):
         """
         Returns the reward function for this step of the game.
         """
+        self.game = game
+
         if is_game_error:
             # Game environment step failed, assign a game lost reward to not incentivise this
             print("Game failed due to error")
@@ -572,7 +590,7 @@ class RLAgent(AgentWithModel):
                 cart_count += 1
 
         unit_count_opponent = len(game.state["teamStates"][not self.team]["units"])
-        research = game.state["teamStates"][self.team]["researchPoints"]
+        research = self.research = game.state["teamStates"][self.team]["researchPoints"]
         city_count = 0
         city_count_opponent = 0
         city_tile_count = 0
@@ -619,7 +637,7 @@ class RLAgent(AgentWithModel):
 
         # Give a reward based on amount of fuel collected
         # fuel_collected = game.stats["teamStats"][self.team]["fuelGenerated"]
-        # rewards["rew/r_fuel_collected"] = (fuel_collected - self.fuel_collected_last) * 0.000451
+        # rewards["rew/r_fuel_collected"] = (fuel_collected - self.fuel_collected_last) * 0.00001
         # self.fuel_collected_last = fuel_collected
 
         # Give a reward for unit creation/death
@@ -631,25 +649,36 @@ class RLAgent(AgentWithModel):
         self.city_tiles_last = city_tile_count
 
         # Give a reward for researching and a penalty for going above 200 research pts
-        assert research >= self.research_last
-        if research > 200:
-            rewards["rew/r_research"] = (research - self.research_last) * -1000
-        else:
-            rewards["rew/r_research"] = (research - self.research_last) * 0.065
+        rewards["rew/r_research"] = 0
+        if research <= 50:
+            rewards["rew/r_research"] = (research - self.research_last) * 0.18
+        elif research <= 200:
+            rewards["rew/r_research"] = (research - self.research_last) * 0.093
         self.research_last = research
-        
-        # Give a reward for the number of turns survived
-        # rewards["rew/r_num_turns_survived"] = 0.015
-        
+
         # Give a reward for the number of cities
-        rewards["rew/r_num_cities"] = (city_count - self.city_count_last) * 0.0251
+        rewards["rew/r_num_cities"] = (city_count - self.city_count_last) * 0.01
         self.city_count_last = city_count
 
         # Give a reward for number of city tiles
-        rewards["rew/r_city_tiles_end"] = (city_tile_count - self.city_tiles_last) * 0.05
+        rewards["rew/r_city_tiles_end"] = (city_tile_count - self.city_tiles_last) * 0.1
         self.city_tiles_last = city_tile_count
         # if is_game_finished and turn >= 360:
         #     rewards["rew/r_city_tiles_end"] = city_tile_count
+        
+        # Calc distance from each resource tile to the closest worker
+        if self.get_workers():
+            total_dist = 0
+            for resource_tile in self.get_resource_tiles():
+                dist = self.get_closest_worker_dist(resource_tile)
+                if resource_tile.resource.type == 'coal':
+                    dist *= 10
+                elif resource_tile.resource.type == 'uranium':
+                    dist *= 100
+                total_dist += dist
+            # smaller distance gives positive reward, larger dist gives negative reward
+            rewards["rew/r_dist_to_resource"] = (self.total_dist_to_resource_tiles - total_dist) * 0.0005
+            self.total_dist_to_resource_tiles = total_dist
 
         # Update the stats and total reward
         reward = 0
@@ -658,57 +687,17 @@ class RLAgent(AgentWithModel):
                 self.stats[name] = 0
             self.stats[name] += value
             reward += value
+
+        if "rew/r_total" not in self.stats:
+            self.stats["rew/r_total"] = 0
         self.stats["rew/r_total"] += reward
 
         # Print the final game stats
         if is_game_finished:
-            print("\nSurvived until turn: " + str(turn))
             stats_string = []
             for key, value in self.stats.items():
                 stats_string.append("%s=%.2f" % (key, value))
+            print()
             print(",".join(stats_string))
 
         return reward
-
-    def process_turn(self, game, team):
-        """
-        Decides on a set of actions for the current turn. Not used in training, only inference.
-        Returns: Array of actions to perform.
-        """
-        start_time = time.time()
-        actions = []
-        new_turn = True
-
-        # Inference the model per-unit
-        units = game.state["teamStates"][team]["units"].values()
-        for unit in units:
-            if unit.can_act():
-                obs = self.get_observation(game, unit, None, unit.team, new_turn)
-                action_code, _states = self.model.predict(obs, deterministic=False)
-                if action_code is not None:
-                    actions.append(self.action_code_to_action(action_code, game=game, unit=unit, city_tile=None, team=unit.team))
-                new_turn = False
-
-        # Inference the model per-city
-        cities = game.cities.values()
-        for city in cities:
-            if city.team == team:
-                for cell in city.city_cells:
-                    city_tile = cell.city_tile
-                    if city_tile.can_act():
-                        obs = self.get_observation(game, None, city_tile, city.team, new_turn)
-                        action_code, _states = self.model.predict(obs, deterministic=False)
-                        if action_code is not None:
-                            actions.append(
-                                self.action_code_to_action(action_code, game=game, unit=None, city_tile=city_tile,
-                                                           team=city.team))
-                        new_turn = False
-
-        time_taken = time.time() - start_time
-        if time_taken > 0.5:  # Warn if larger than 0.5 seconds.
-            print("WARNING: Inference took %.3f seconds for computing actions. Limit is 1 second." % time_taken,
-                  file=sys.stderr)
-
-        return actions
-
-
