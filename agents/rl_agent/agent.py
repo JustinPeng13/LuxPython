@@ -123,13 +123,13 @@ class RLAgent(AgentWithModel):
             partial(MoveAction, direction=Constants.DIRECTIONS.WEST),
             partial(MoveAction, direction=Constants.DIRECTIONS.SOUTH),
             partial(MoveAction, direction=Constants.DIRECTIONS.EAST),
-            # smart_transfer_to_nearby, # Transfer resource to nearby worker or cart
+            smart_transfer_to_nearby, # Transfer resource to nearby worker or cart
             SpawnCityAction,
-            #PillageAction,
+            # PillageAction,
         ]
         self.actionSpaceMapCities = [
             SpawnWorkerAction,
-            # SpawnCartAction,
+            SpawnCartAction,
             ResearchAction,
         ]
 
@@ -547,17 +547,13 @@ class RLAgent(AgentWithModel):
 
         self.research_last = 0
         self.units_last = 0
+        self.city_count_last = 0
         self.city_tiles_last = 0
-
-        self.turn = 0 # keep track of turn number
 
     def get_reward(self, game, is_game_finished, is_new_turn, is_game_error):
         """
         Returns the reward function for this step of the game.
         """
-        if is_new_turn:
-            self.turn += 1
-
         if is_game_error:
             # Game environment step failed, assign a game lost reward to not incentivise this
             print("Game failed due to error")
@@ -568,6 +564,7 @@ class RLAgent(AgentWithModel):
             return 0
 
         # Get some basic stats
+        turn = game.state["turn"]
         unit_count = len(game.state["teamStates"][self.team]["units"])
         cart_count = 0
         for id, u in game.state["teamStates"][self.team]["units"].items():
@@ -575,7 +572,7 @@ class RLAgent(AgentWithModel):
                 cart_count += 1
 
         unit_count_opponent = len(game.state["teamStates"][not self.team]["units"])
-        research = min(game.state["teamStates"][self.team]["researchPoints"], 200.0) # Cap research points at 200
+        research = game.state["teamStates"][self.team]["researchPoints"]
         city_count = 0
         city_count_opponent = 0
         city_tile_count = 0
@@ -598,7 +595,7 @@ class RLAgent(AgentWithModel):
         self.stats["game/city_count"] = city_count
         self.stats["game/unit_count"] = unit_count
         self.stats["game/cart_count"] = cart_count
-        self.stats["game/turns"] = game.state["turn"]
+        self.stats["game/turns"] = turn
 
         rewards = {}
 
@@ -616,45 +613,56 @@ class RLAgent(AgentWithModel):
             self.fuel_last[type] = fuel_now
         
         # Give more incentive for coal and uranium
-        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.COAL] *= 2
-        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.URANIUM] *= 4
-        
+        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.WOOD] *= 0
+        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.COAL] *= 10
+        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.URANIUM] *= 100
+
         # Give a reward based on amount of fuel collected
-        fuel_collected = game.stats["teamStats"][self.team]["fuelGenerated"]
-        rewards["rew/r_fuel_collected"] = (fuel_collected - self.fuel_collected_last) * 0.0005 # 0.00005
-        self.fuel_collected_last = fuel_collected
+        # fuel_collected = game.stats["teamStats"][self.team]["fuelGenerated"]
+        # rewards["rew/r_fuel_collected"] = (fuel_collected - self.fuel_collected_last) * 0.000451
+        # self.fuel_collected_last = fuel_collected
 
         # Give a reward for unit creation/death
-        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.05
+        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.1
         self.units_last = unit_count
 
         # Give a reward for city tile creation/death
-        rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.1
+        rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.068
         self.city_tiles_last = city_tile_count
 
-        # Give a reward for researching
-        rewards["rew/r_research"] = (research - self.research_last) * 0.005 # 0.0025
-        # penalty for going above 200 research pts
+        # Give a reward for researching and a penalty for going above 200 research pts
+        assert research >= self.research_last
         if research > 200:
-            rewards["rew/r_research"] = -0.1
+            rewards["rew/r_research"] = (research - self.research_last) * -1000
+        else:
+            rewards["rew/r_research"] = (research - self.research_last) * 0.065
         self.research_last = research
         
-        # Give a reward based on number of city tiles at the end of the game (only if survived to turn 360)
-        rewards["rew/r_city_tiles_end"] = 0
-        if is_game_finished:
-            print("Survived until turn: " + str(self.turn))
-            if self.turn >= 360:
-                rewards["rew/r_city_tiles_end"] = city_tile_count * 10
+        # Give a reward for the number of turns survived
+        # rewards["rew/r_num_turns_survived"] = 0.015
+        
+        # Give a reward for the number of cities
+        rewards["rew/r_num_cities"] = (city_count - self.city_count_last) * 0.0251
+        self.city_count_last = city_count
+
+        # Give a reward for number of city tiles
+        rewards["rew/r_city_tiles_end"] = (city_tile_count - self.city_tiles_last) * 0.05
+        self.city_tiles_last = city_tile_count
+        # if is_game_finished and turn >= 360:
+        #     rewards["rew/r_city_tiles_end"] = city_tile_count
 
         # Update the stats and total reward
         reward = 0
         for name, value in rewards.items():
+            if name not in self.stats:
+                self.stats[name] = 0
             self.stats[name] += value
             reward += value
         self.stats["rew/r_total"] += reward
 
         # Print the final game stats
         if is_game_finished:
+            print("\nSurvived until turn: " + str(turn))
             stats_string = []
             for key, value in self.stats.items():
                 stats_string.append("%s=%.2f" % (key, value))

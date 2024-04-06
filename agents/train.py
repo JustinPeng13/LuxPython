@@ -41,15 +41,15 @@ def get_command_line_arguments():
     """
     parser = argparse.ArgumentParser(description='Training script for Lux RL agent.')
     parser.add_argument('--id', help='Identifier of this run', type=str, default=str(random.randint(0, 10000)))
-    parser.add_argument('--learning_rate', help='Learning rate', type=float, default=0.001)
-    parser.add_argument('--gamma', help='Gamma', type=float, default=0.995)
+    parser.add_argument('--learning_rate', help='Learning rate', type=float, default=0.003)
+    parser.add_argument('--gamma', help='Gamma', type=float, default=0.999)
     parser.add_argument('--gae_lambda', help='GAE Lambda', type=float, default=0.95)
     parser.add_argument('--batch_size', help='batch_size', type=int, default=2048)  # 64
-    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=700000)
+    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=1000000)
     parser.add_argument('--n_steps', help='Number of experiences to gather before each learning period', type=int, default=2048)
     parser.add_argument('--path', help='Path to a checkpoint to load to resume training', type=str, default=None)
     parser.add_argument('--n_envs', help='Number of parallel environments to use in training', type=int, default=1)
-    # parser.add_argument('--device', help='Device to use in training', type=str, default="cuda")
+    parser.add_argument('--device', help='Device to use in training', type=str, default="cuda")
     args = parser.parse_args()
 
     return args
@@ -66,8 +66,8 @@ def train(args):
     configs = LuxMatchConfigs_Default
 
     # Train against dummy agent or rule based agent
-    opponent = Agent()
-    # opponent = RuleBasedAgent()
+    # opponent = Agent()
+    opponent = RuleBasedAgent()
 
     # Create a RL agent in training mode
     player = RLAgent(mode="train")
@@ -81,7 +81,7 @@ def train(args):
     else:
         env = SubprocVecEnv([make_env(LuxEnvironment(configs=configs,
                                                      learning_agent=RLAgent(mode="train"),
-                                                     opponent_agent=opponent), i) for i in range(args.n_envs)])
+                                                     opponent_agent=RuleBasedAgent()), i) for i in range(args.n_envs)])
     
     run_id = args.id
     print("Run id %s" % run_id)
@@ -108,7 +108,7 @@ def train(args):
             gae_lambda=args.gae_lambda,
             batch_size=args.batch_size,
             n_steps=args.n_steps,
-            device="cuda"
+            device=args.device
         )
 
     # Save a checkpoint and 5 match replay files every 100K steps
@@ -153,7 +153,7 @@ def train(args):
     
     # Learn with self-play against the learned model as an opponent now
     print("Training model with self-play against last version of model...")
-    player = RLAgent(mode="train")
+    # player = RLAgent(mode="train")
     opponent = RLAgent(mode="inference", model=model)
     env = LuxEnvironment(configs, player, opponent)
     model = PPO("MlpPolicy",
@@ -163,10 +163,9 @@ def train(args):
         learning_rate = 0.0003,
         gamma=0.999,
         gae_lambda = 0.95,
-        device="cuda"
+        device=args.device
     )
-
-    model.learn(total_timesteps=2000)
+    model.learn(total_timesteps=50000, callback=callbacks)
 
     env.close()
     print("Done")
