@@ -44,7 +44,7 @@ def get_command_line_arguments():
     parser.add_argument('--gamma', help='Gamma', type=float, default=0.995)
     parser.add_argument('--gae_lambda', help='GAE Lambda', type=float, default=0.95)
     parser.add_argument('--batch_size', help='batch_size', type=int, default=2048)  # 64
-    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=10000000)
+    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=500000)
     parser.add_argument('--n_steps', help='Number of experiences to gather before each learning period', type=int, default=2048)
     parser.add_argument('--path', help='Path to a checkpoint to load to resume training', type=str, default=None)
     parser.add_argument('--n_envs', help='Number of parallel environments to use in training', type=int, default=1)
@@ -116,7 +116,7 @@ def train(args):
     player_replay = AgentPolicy(mode="inference", model=model)
     callbacks.append(
         SaveReplayAndModelCallback(
-                                save_freq=1000000,
+                                save_freq=100000,
                                 save_path='./models/',
                                 name_prefix=f'model{run_id}',
                                 replay_env=LuxEnvironment(
