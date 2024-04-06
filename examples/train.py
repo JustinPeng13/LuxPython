@@ -5,6 +5,7 @@ import sys
 import random
 
 from stable_baselines3 import PPO  # pip install stable-baselines3
+from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.utils import set_random_seed, get_schedule_fn
 from stable_baselines3.common.vec_env import SubprocVecEnv
@@ -40,12 +41,12 @@ def get_command_line_arguments():
     """
     parser = argparse.ArgumentParser(description='Training script for Lux RL agent.')
     parser.add_argument('--id', help='Identifier of this run', type=str, default=str(random.randint(0, 10000)))
-    parser.add_argument('--learning_rate', help='Learning rate', type=float, default=0.001)
-    parser.add_argument('--gamma', help='Gamma', type=float, default=0.995)
+    parser.add_argument('--learning_rate', help='Learning rate', type=float, default=0.01)
+    parser.add_argument('--gamma', help='Gamma', type=float, default=0.7)
     parser.add_argument('--gae_lambda', help='GAE Lambda', type=float, default=0.95)
     parser.add_argument('--batch_size', help='batch_size', type=int, default=2048)  # 64
-    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=700000)
-    parser.add_argument('--n_steps', help='Number of experiences to gather before each learning period', type=int, default=2048)
+    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=2000000)
+    parser.add_argument('--n_steps', help='Number of experiences to gather before each learning period', type=int, default=2048) #not needed for DQN
     parser.add_argument('--path', help='Path to a checkpoint to load to resume training', type=str, default=None)
     parser.add_argument('--n_envs', help='Number of parallel environments to use in training', type=int, default=1)
     # parser.add_argument('--device', help='Device to use in training', type=str, default="cuda")
@@ -87,7 +88,7 @@ def train(args):
     if args.path:
         print('using previous args', args, args.path)
         # by default previous model params are used (lr, batch size, gamma...)
-        model = PPO.load(args.path)
+        model = DQN.load(args.path)
         model.set_env(env=env)
 
         # Update the learning rate
@@ -96,16 +97,17 @@ def train(args):
         # TODO: Update other training parameters
     else:
         print('using new args', args)
-        model = PPO("MlpPolicy",
+        model = DQN("MlpPolicy",
                     env,
                     verbose=1,
                     tensorboard_log="./lux_tensorboard/",
                     learning_rate=args.learning_rate,
                     gamma=args.gamma,
-                    gae_lambda=args.gae_lambda,
+                    # gae_lambda=args.gae_lambda,
                     batch_size=args.batch_size,
-                    n_steps=args.n_steps,
-                    device="cpu"
+                    # n_steps=args.n_steps,
+                    device="cpu",
+                    seed=42
                     )
 
     
@@ -116,7 +118,7 @@ def train(args):
     player_replay = AgentPolicy(mode="inference", model=model)
     callbacks.append(
         SaveReplayAndModelCallback(
-                                save_freq=1000000,
+                                save_freq=100000,
                                 save_path='./models/',
                                 name_prefix=f'model{run_id}',
                                 replay_env=LuxEnvironment(
@@ -139,8 +141,8 @@ def train(args):
         callbacks.append(
             EvalCallback(env_eval, best_model_save_path=f'./logs_{run_id}/',
                              log_path=f'./logs_{run_id}/',
-                             eval_freq=args.n_steps*2, # Run it every 2 training iterations
-                             n_eval_episodes=30, # Run 30 games
+                             eval_freq=args.n_steps*5, # Run it every 2 training iterations
+                             n_eval_episodes=20, # Run 30 games
                              deterministic=False, render=False)
         )
 
@@ -175,14 +177,18 @@ def train(args):
     player = AgentPolicy(mode="train")
     opponent = AgentPolicy(mode="inference", model=model)
     env = LuxEnvironment(configs, player, opponent)
-    model = PPO("MlpPolicy",
-        env,
-        verbose=1,
-        tensorboard_log="./lux_tensorboard/",
-        learning_rate = 0.0003,
-        gamma=0.999,
-        gae_lambda = 0.95
-    )
+    model = DQN("MlpPolicy",
+                    env,
+                    verbose=1,
+                    tensorboard_log="./lux_tensorboard/",
+                    learning_rate=args.learning_rate,
+                    gamma=args.gamma,
+                    # gae_lambda=args.gae_lambda,
+                    batch_size=args.batch_size,
+                    # n_steps=args.n_steps,
+                    device="cpu",
+                    seed=42
+                    )
 
     model.learn(total_timesteps=2000)
     env.close()
