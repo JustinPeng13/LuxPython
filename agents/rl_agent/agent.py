@@ -177,15 +177,6 @@ class RLAgent(AgentWithModel):
 
         self.object_nodes = {}
 
-    def get_agent_type(self):
-        """
-        Returns the type of agent. Use AGENT for inference, and LEARNING for training a model.
-        """
-        if self.mode == "train":
-            return Constants.AGENT_TYPE.LEARNING
-        else:
-            return Constants.AGENT_TYPE.AGENT
-
     def get_observation(self, game, unit, city_tile, team, is_new_turn):
         """
         Implements getting a observation from the current game for this unit or city
@@ -490,7 +481,7 @@ class RLAgent(AgentWithModel):
         """
         action = self.action_code_to_action(action_code, game, unit, city_tile, team)
         self.match_controller.take_action(action)
-    
+
     def game_start(self, game):
         """
         This funciton is called at the start of each game. Use this to
@@ -546,8 +537,8 @@ class RLAgent(AgentWithModel):
             for x in range(game_map.width):
                 cell = game_map.get_cell(x, y)
                 if not cell.has_resource(): continue
-                if cell.resource.type == 'coal' and self.research < 50: continue
-                if cell.resource.type == 'uranium' and self.research < 200: continue
+                # if cell.resource.type == 'coal' and self.research < 50: continue
+                # if cell.resource.type == 'uranium' and self.research < 200: continue
                 self.resource_tiles.append(cell)
         return self.resource_tiles
 
@@ -632,8 +623,8 @@ class RLAgent(AgentWithModel):
         
         # Give more incentive for coal and uranium
         rewards["rew/r_%s" % Constants.RESOURCE_TYPES.WOOD] *= 0
-        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.COAL] *= 10
-        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.URANIUM] *= 100
+        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.COAL] *= 20
+        rewards["rew/r_%s" % Constants.RESOURCE_TYPES.URANIUM] *= 400
 
         # Give a reward based on amount of fuel collected
         # fuel_collected = game.stats["teamStats"][self.team]["fuelGenerated"]
@@ -641,7 +632,7 @@ class RLAgent(AgentWithModel):
         # self.fuel_collected_last = fuel_collected
 
         # Give a reward for unit creation/death
-        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.1
+        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.12
         self.units_last = unit_count
 
         # Give a reward for city tile creation/death
@@ -651,16 +642,16 @@ class RLAgent(AgentWithModel):
         # Give a reward for researching and a penalty for going above 200 research pts
         rewards["rew/r_research"] = 0
         if research <= 50:
-            rewards["rew/r_research"] = (research - self.research_last) * 0.18
+            rewards["rew/r_research"] = (research - self.research_last) * 0.09
         elif research <= 200:
-            rewards["rew/r_research"] = (research - self.research_last) * 0.093
+            rewards["rew/r_research"] = (research - self.research_last) * 0.045
         self.research_last = research
 
-        # Give a reward for the number of cities
-        rewards["rew/r_num_cities"] = (city_count - self.city_count_last) * 0.01
-        self.city_count_last = city_count
+        # Give a reward for the number of cities created/removed
+        # rewards["rew/r_num_cities"] = (city_count - self.city_count_last) * 0.01
+        # self.city_count_last = city_count
 
-        # Give a reward for number of city tiles
+        # Give a reward for number of city tiles created/removed
         rewards["rew/r_city_tiles_end"] = (city_tile_count - self.city_tiles_last) * 0.1
         self.city_tiles_last = city_tile_count
         # if is_game_finished and turn >= 360:
@@ -671,13 +662,16 @@ class RLAgent(AgentWithModel):
             total_dist = 0
             for resource_tile in self.get_resource_tiles():
                 dist = self.get_closest_worker_dist(resource_tile)
-                if resource_tile.resource.type == 'coal':
-                    dist *= 10
-                elif resource_tile.resource.type == 'uranium':
-                    dist *= 100
+                # if resource_tile.resource.type == 'coal':
+                #     dist *= 2
+                # elif resource_tile.resource.type == 'uranium':
+                #     dist *= 4
                 total_dist += dist
             # smaller distance gives positive reward, larger dist gives negative reward
-            rewards["rew/r_dist_to_resource"] = (self.total_dist_to_resource_tiles - total_dist) * 0.0005
+            if self.total_dist_to_resource_tiles == 0:
+                rewards["rew/r_dist_to_resource"] = 0
+            else:
+                rewards["rew/r_dist_to_resource"] = (self.total_dist_to_resource_tiles - total_dist) * 0.003
             self.total_dist_to_resource_tiles = total_dist
 
         # Update the stats and total reward
