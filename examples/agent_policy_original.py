@@ -527,12 +527,12 @@ class AgentPolicy(AgentWithModel):
         
         rewards = {}
         
-        # Give a reward for unit creation/death. 0.05 reward per unit.
-        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.05
+        # Give a reward for unit creation/death. 0.75 reward per unit.
+        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.75
         self.units_last = unit_count
 
-        # Give a reward for city creation/death. 0.1 reward per city.
-        rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.1
+        # Give a reward for city creation/death. 0.4 reward per city.
+        rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.4
         self.city_tiles_last = city_tile_count
 
         # Reward collecting fuel
@@ -540,11 +540,11 @@ class AgentPolicy(AgentWithModel):
         rewards["rew/r_fuel_collected"] = ( (fuel_collected - self.fuel_collected_last) / 20000 )
         self.fuel_collected_last = fuel_collected
 
-        # Give a reward of 1.0 per city tile alive at the end of the game
+        # Give a reward of 100.0 per city tile alive at the end of the game
         rewards["rew/r_city_tiles_end"] = 0
         if is_game_finished:
             self.is_last_turn = True
-            rewards["rew/r_city_tiles_end"] = city_tile_count
+            rewards["rew/r_city_tiles_end"] = city_tile_count*100
 
             '''
             # Example of a game win/loss reward instead

@@ -10,7 +10,7 @@ from stable_baselines3.common.utils import set_random_seed, get_schedule_fn
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from examples.agent_policy_original_conservative import AgentPolicy
-from examples.rba_policy import RuleBasedAgent
+from examples.rba_agent_v1 import RuleBasedAgent
 from luxai2021.env.agent import Agent
 from luxai2021.env.lux_env import LuxEnvironment, SaveReplayAndModelCallback
 from luxai2021.game.constants import LuxMatchConfigs_Default
@@ -45,7 +45,7 @@ def get_command_line_arguments():
     parser.add_argument('--gamma', help='Gamma', type=float, default=0.995)
     parser.add_argument('--gae_lambda', help='GAE Lambda', type=float, default=0.95)
     parser.add_argument('--batch_size', help='batch_size', type=int, default=2048)  # 64
-    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=500000)
+    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=2000000)
     parser.add_argument('--n_steps', help='Number of experiences to gather before each learning period', type=int, default=2048)
     parser.add_argument('--path', help='Path to a checkpoint to load to resume training', type=str, default=None)
     parser.add_argument('--n_envs', help='Number of parallel environments to use in training', type=int, default=1)
@@ -182,7 +182,8 @@ def train(args):
         tensorboard_log="./lux_tensorboard/",
         learning_rate = 0.003,
         gamma=0.3,
-        gae_lambda = 0.7
+        gae_lambda = 0.99,
+        target_kl=0.07
     )
 
     model.learn(total_timesteps=2000)

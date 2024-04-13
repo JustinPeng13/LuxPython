@@ -8,7 +8,7 @@ from stable_baselines3 import PPO  # pip install stable-baselines3
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.utils import set_random_seed, get_schedule_fn
 from stable_baselines3.common.vec_env import SubprocVecEnv
-
+from examples.rba_agent_v1 import RuleBasedAgent
 from examples.agent_policy_original import AgentPolicy
 from luxai2021.env.agent import Agent
 from luxai2021.env.lux_env import LuxEnvironment, SaveReplayAndModelCallback
@@ -44,7 +44,7 @@ def get_command_line_arguments():
     parser.add_argument('--gamma', help='Gamma', type=float, default=0.995)
     parser.add_argument('--gae_lambda', help='GAE Lambda', type=float, default=0.95)
     parser.add_argument('--batch_size', help='batch_size', type=int, default=2048)  # 64
-    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=500000)
+    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=2000000)
     parser.add_argument('--n_steps', help='Number of experiences to gather before each learning period', type=int, default=2048)
     parser.add_argument('--path', help='Path to a checkpoint to load to resume training', type=str, default=None)
     parser.add_argument('--n_envs', help='Number of parallel environments to use in training', type=int, default=1)
@@ -173,7 +173,7 @@ def train(args):
     # Learn with self-play against the learned model as an opponent now
     print("Training model with self-play against last version of model...")
     player = AgentPolicy(mode="train")
-    opponent = AgentPolicy(mode="inference", model=model)
+    opponent = RuleBasedAgent()
     env = LuxEnvironment(configs, player, opponent)
     model = PPO("MlpPolicy",
         env,
@@ -181,7 +181,8 @@ def train(args):
         tensorboard_log="./lux_tensorboard/",
         learning_rate = 0.0003,
         gamma=0.999,
-        gae_lambda = 0.95
+        gae_lambda = 0.95,
+        target_kl=0.28
     )
 
     model.learn(total_timesteps=2000)
