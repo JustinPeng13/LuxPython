@@ -4,19 +4,19 @@ import os
 import sys
 import random
 
-from stable_baselines3 import PPO  # pip install stable-baselines3
+from stable_baselines3 import PPO, DQN  # pip install stable-baselines3
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.utils import set_random_seed, get_schedule_fn
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from examples.rba_agent_v1 import RuleBasedAgent
-from examples.agent_policy_original import AgentPolicy
+from examples.agent_policy_DQN_1 import DQN_1_AgentPolicy
 from luxai2021.env.agent import Agent
 from luxai2021.env.lux_env import LuxEnvironment, SaveReplayAndModelCallback
 from luxai2021.game.constants import LuxMatchConfigs_Default
 
 
 # https://stable-baselines3.readthedocs.io/en/master/guide/examples.html?highlight=SubprocVecEnv#multiprocessing-unleashing-the-power-of-vectorized-environments
-def make_env(local_env, rank, seed=0):
+def make_env(local_env, rank, seed=100):
     """
     Utility function for multi-processed env.
 
@@ -44,7 +44,7 @@ def get_command_line_arguments():
     parser.add_argument('--gamma', help='Gamma', type=float, default=0.995)
     parser.add_argument('--gae_lambda', help='GAE Lambda', type=float, default=0.95)
     parser.add_argument('--batch_size', help='batch_size', type=int, default=2048)  # 64
-    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=2000000)
+    parser.add_argument('--step_count', help='Total number of steps to train', type=int, default=20000000)
     parser.add_argument('--n_steps', help='Number of experiences to gather before each learning period', type=int, default=2048)
     parser.add_argument('--path', help='Path to a checkpoint to load to resume training', type=str, default=None)
     parser.add_argument('--n_envs', help='Number of parallel environments to use in training', type=int, default=1)
@@ -68,7 +68,7 @@ def train(args):
     opponent = Agent()
 
     # Create a RL agent in training mode
-    player = AgentPolicy(mode="train")
+    player = DQN_1_AgentPolicy(mode="train")
 
     # Train the model
     env_eval = None
@@ -78,7 +78,7 @@ def train(args):
                              opponent_agent=opponent)
     else:
         env = SubprocVecEnv([make_env(LuxEnvironment(configs=configs,
-                                                     learning_agent=AgentPolicy(mode="train"),
+                                                     learning_agent=DQN_1_AgentPolicy(mode="train"),
                                                      opponent_agent=opponent), i) for i in range(args.n_envs)])
     
     run_id = args.id
@@ -87,24 +87,24 @@ def train(args):
     if args.path:
         print('using previous args', args, args.path)
         # by default previous model params are used (lr, batch size, gamma...)
-        model = PPO.load(args.path)
+        model = DQN.load(args.path)
         model.set_env(env=env)
 
         # Update the learning rate
         model.lr_schedule = get_schedule_fn(args.learning_rate)
 
-        # TODO: Update other training parameters
     else:
         print('using new args', args)
-        model = PPO("MlpPolicy",
+        model = DQN("MlpPolicy",
                     env,
                     verbose=1,
                     tensorboard_log="./lux_tensorboard/",
-                    learning_rate=args.learning_rate,
-                    gamma=args.gamma,
-                    gae_lambda=args.gae_lambda,
+                    learning_rate=0.003,
+                    gamma=0.97,
+                    train_freq=4,
+                    target_update_interval= 10000,
                     batch_size=args.batch_size,
-                    n_steps=args.n_steps,
+                    tau = 0.8,
                     device="cpu"
                     )
 
@@ -113,7 +113,7 @@ def train(args):
     callbacks = []
 
     # Save a checkpoint and 5 match replay files every 100K steps
-    player_replay = AgentPolicy(mode="inference", model=model)
+    player_replay = DQN_1_AgentPolicy(mode="inference", model=model)
     callbacks.append(
         SaveReplayAndModelCallback(
                                 save_freq=100000,
@@ -133,8 +133,8 @@ def train(args):
     if args.n_envs > 1:
         # An evaluation environment is needed to measure multi-env setups. Use a fixed 4 envs.
         env_eval = SubprocVecEnv([make_env(LuxEnvironment(configs=configs,
-                                                     learning_agent=AgentPolicy(mode="train"),
-                                                     opponent_agent=opponent), i) for i in range(4)])
+                                                          learning_agent=DQN_1_AgentPolicy(mode="train"),
+                                                          opponent_agent=opponent), i) for i in range(4)])
 
         callbacks.append(
             EvalCallback(env_eval, best_model_save_path=f'./logs_{run_id}/',
@@ -170,25 +170,39 @@ def train(args):
     print("Done")
 
     
-    # Learn with self-play against the learned model as an opponent now
+    # Learn with play against the rba model as an opponent now
     print("Training model with self-play against last version of model...")
-    player = AgentPolicy(mode="train")
+    player = DQN_1_AgentPolicy(mode="train")
     opponent = RuleBasedAgent()
     env = LuxEnvironment(configs, player, opponent)
-    model = PPO("MlpPolicy",
-        env,
-        verbose=1,
-        tensorboard_log="./lux_tensorboard/",
-        learning_rate = 0.0003,
-        gamma=0.999,
-        gae_lambda = 0.95,
-        target_kl=0.28
-    )
+    model = DQN("MlpPolicy",
+                env,
+                verbose=1,
+                tensorboard_log="./lux_tensorboard/",
+                learning_rate=0.01,
+                gamma=0.99,
+                train_freq=4,
+                target_update_interval=10000,
+                batch_size=args.batch_size,
+                n_steps=1000000,
+                device="cpu"
+                )
 
     model.learn(total_timesteps=2000)
     env.close()
     print("Done")
-    
+
+    def turn_heurstics(self, game, is_first_turn):
+        """
+        This is called pre-observation actions to allow for hardcoded heuristics
+        to control a subset of units. Any unit or city that gets an action from this
+        callback, will not create an observation+action.
+
+        Args:
+            game ([type]): Game in progress
+            is_first_turn (bool): True if it's the first turn of a game.
+        """
+        return
 
 
 if __name__ == "__main__":
