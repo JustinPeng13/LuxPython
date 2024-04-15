@@ -27,7 +27,9 @@ class Replay:
         self.data = {
             'seed' : 0,
             'mapType' :  Constants.MAP_TYPES.RANDOM,
-            'teamDetails' : [{"name":game.agents[0].team, "tournamentID":""}, {"name":game.agents[1].team, "tournamentID":""}],
+            'teamDetails' : [{"name":game.agents[0], "tournamentID":""},
+                             {"name":game.agents[1], "tournamentID":""}
+            ],
             'allCommands' : [], # Array<Array<str>>;
             'version' : "3.1.0", #string;
             "results":{"ranks":[{"rank":1,"agentID":0},{"rank":2,"agentID":1}],"replayFile":"replays\\1632799860645_ADAt9Ktkv2za.json"},

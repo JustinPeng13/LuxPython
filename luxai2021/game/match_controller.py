@@ -121,6 +121,8 @@ class MatchController:
             self.agents[0].set_team(r)
             self.agents[1].set_team((r + 1) % 2)
 
+        self.game.agents = [self.agents[self.agents[0].team].__class__.__name__, self.agents[self.agents[1].team].__class__.__name__]
+
         # Reset action sequences
         self.action_sequences = {}
 

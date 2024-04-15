@@ -45,25 +45,18 @@ def run_matches(args, num_matches=10):
 
     configs = LuxMatchConfigs_Default
     player = RLAgent(mode="inference", model=model)
-    player.set_team("RLAgent")
     opponent = RuleBasedAgent()
-    opponent.set_team("RuleBasedAgent")
-    env = LuxEnvironment(configs=configs,
-                         learning_agent=player,
-                         opponent_agent=opponent
-    )
-
-    model.set_env(env)
-
-    env.game.configs["seed"] = random.randint(-10000,10000)
-    env.game.start_replay_logging(stateful=True, replay_folder="./replays/", replay_filename_prefix="replay")
 
     for i in range(num_matches): # run 5 matches
+        env = LuxEnvironment(configs=configs,
+                         learning_agent=player,
+                         opponent_agent=opponent
+        )
         env.game.configs["seed"] = random.randint(-10000,10000)
+        env.game.start_replay_logging(stateful=True, replay_folder="./replays/", replay_filename_prefix="replay")
+        model.set_env(env)
         env.run_no_learn()
-        env.render()
-
-    env.close()
+        env.close()
 
 if __name__ == "__main__":
     if sys.version_info < (3,7) or sys.version_info >= (3,8):
