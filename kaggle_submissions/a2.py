@@ -1,10 +1,12 @@
 from stable_baselines3 import DQN  # pip install stable-baselines3
 
 from luxai2021.env.agent import AgentFromStdInOut
-from examples.rba_agent_v1 import RuleBasedAgent
 from luxai2021.env.lux_env import LuxEnvironment
 from luxai2021.game.constants import LuxMatchConfigs_Default
-from examples.agent_policy_DQN_1 import DQN_1_AgentPolicy
+from agent_policy_DQN_1 import DQN_1_AgentPolicy
+from agent_policy_DQN_2 import DQN_2_AgentPolicy
+from agent_policy_DQN_3 import DQN_3_AgentPolicy
+from agent_policy_DQN_4 import DQN_4_AgentPolicy
 
 if __name__ == "__main__":
     """
@@ -18,15 +20,13 @@ if __name__ == "__main__":
     configs = LuxMatchConfigs_Default
 
     # Load the saved model
-    model_id = 7113
-    total_steps = int(900000)
-    model = DQN.load(f"model7113_step1500000.zip")
+    model = DQN.load(f"DQN3_3o2m.zip")
 
     # Create a kaggle-remote opponent agent
-    opponent = RuleBasedAgent()
+    opponent = AgentFromStdInOut()
 
     # Create a RL agent in inference mode
-    player = DQN_1_AgentPolicy(mode="inference", model=model)
+    player = DQN_3_AgentPolicy(mode="inference", model=model)
 
     # Run the environment
     env = LuxEnvironment(configs, player, opponent)

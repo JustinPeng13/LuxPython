@@ -9,7 +9,7 @@ from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.utils import set_random_seed, get_schedule_fn
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from examples.rba_agent_v1 import RuleBasedAgent
-from examples.agent_policy_DQN_1 import DQN_1_AgentPolicy
+from examples.agent_policy_DQN_4 import DQN_4_AgentPolicy
 from luxai2021.env.agent import Agent
 from luxai2021.env.lux_env import LuxEnvironment, SaveReplayAndModelCallback
 from luxai2021.game.constants import LuxMatchConfigs_Default
@@ -39,7 +39,7 @@ def get_command_line_arguments():
     :return:(ArgumentParser) The command line arguments as an ArgumentParser
     """
     parser = argparse.ArgumentParser(description='Training script for Lux RL agent.')
-    parser.add_argument('--id', help='Identifier of this run', type=str, default="DQN_1")
+    parser.add_argument('--id', help='Identifier of this run', type=str, default="DQN_4")
     parser.add_argument('--learning_rate', help='Learning rate', type=float, default=0.001)
     parser.add_argument('--gamma', help='Gamma', type=float, default=0.995)
     parser.add_argument('--gae_lambda', help='GAE Lambda', type=float, default=0.95)
@@ -68,7 +68,7 @@ def train(args):
     opponent = Agent()
 
     # Create a RL agent in training mode
-    player = DQN_1_AgentPolicy(mode="train")
+    player = DQN_4_AgentPolicy(mode="train")
 
     # Train the model
     env_eval = None
@@ -78,7 +78,7 @@ def train(args):
                              opponent_agent=opponent)
     else:
         env = SubprocVecEnv([make_env(LuxEnvironment(configs=configs,
-                                                     learning_agent=DQN_1_AgentPolicy(mode="train"),
+                                                     learning_agent=DQN_4_AgentPolicy(mode="train"),
                                                      opponent_agent=opponent), i) for i in range(args.n_envs)])
     
     run_id = args.id
@@ -113,7 +113,7 @@ def train(args):
     callbacks = []
 
     # Save a checkpoint and 5 match replay files every 100K steps
-    player_replay = DQN_1_AgentPolicy(mode="inference", model=model)
+    player_replay = DQN_4_AgentPolicy(mode="inference", model=model)
     callbacks.append(
         SaveReplayAndModelCallback(
                                 save_freq=100000,
@@ -133,7 +133,7 @@ def train(args):
     if args.n_envs > 1:
         # An evaluation environment is needed to measure multi-env setups. Use a fixed 4 envs.
         env_eval = SubprocVecEnv([make_env(LuxEnvironment(configs=configs,
-                                                          learning_agent=DQN_1_AgentPolicy(mode="train"),
+                                                          learning_agent=DQN_4_AgentPolicy(mode="train"),
                                                           opponent_agent=opponent), i) for i in range(4)])
 
         callbacks.append(
@@ -172,7 +172,7 @@ def train(args):
     
     # Learn with play against the rba model as an opponent now
     print("Training model with self-play against last version of model...")
-    player = DQN_1_AgentPolicy(mode="train")
+    player = DQN_4_AgentPolicy(mode="train")
     opponent = RuleBasedAgent()
     env = LuxEnvironment(configs, player, opponent)
     model = DQN("MlpPolicy",

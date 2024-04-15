@@ -102,7 +102,7 @@ def smart_transfer_to_nearby(game, team, unit_id, unit, target_type_restriction=
 ########################################################################################################################
 # This is the Agent that you need to design for the competition
 ########################################################################################################################
-class DQN_1_AgentPolicy(AgentWithModel):
+class DQN_3_AgentPolicy(AgentWithModel):
     def __init__(self, mode="train", model=None) -> None:
         """
         Arguments:
@@ -573,24 +573,8 @@ class DQN_1_AgentPolicy(AgentWithModel):
 
         # Balance research against manpower
         research = game.state["teamStates"][self.team]["researchPoints"]
-        rewards["rew/r_research"] = research*0.3 + 0.01
+        rewards["rew/r_research"] = research*0.033 if research < 50 else (research*0.021 if research < 200 else research*(-0.001))
 
-        #Reward exploration
-
-        # Calc distance from each resource tile to the closest worker
-        if self.get_workers():
-            total_dist = 0
-            for resource_tile in self.get_resource_tiles():
-                dist = self.get_closest_worker_dist(resource_tile)
-                if resource_tile.resource.type == 'coal':
-                    dist *= 10
-                elif resource_tile.resource.type == 'uranium':
-                    dist *= 100
-                total_dist += dist
-
-            # smaller distance gives positive reward, larger dist gives negative reward
-            rewards["rew/r_dist_to_resource"] = (self.total_dist_to_resource_tiles - total_dist) * 0.0005
-            self.total_dist_to_resource_tiles = total_dist
 
         # Give a reward of 5.0 per city tile alive at the end of the game
         rewards["rew/r_city_tiles_end"] = 0
@@ -598,15 +582,29 @@ class DQN_1_AgentPolicy(AgentWithModel):
             self.is_last_turn = True
             rewards["rew/r_city_tiles_end"] = city_tile_count*5
 
+            eff = {'coal': 0.56, 'wood': 0.43, 'uranium': 0.75}
+            wood_used = game.stats["teamStats"][self.team]["resourcesCollected"]["wood"]
+            uranium_used = game.stats["teamStats"][self.team]["resourcesCollected"]["uranium"]
+            coal_used = game.stats["teamStats"][self.team]["resourcesCollected"]["coal"]
+            rewards["rew/r_fuel_pollution_primary"] = wood_used * eff["wood"] + coal_used * eff["coal"] + uranium_used * eff["uranium"]
 
-            '''
-            # Example of a game win/loss reward instead
-            if game.get_winning_team() == self.team:
-                rewards["rew/r_game_win"] = 100.0 # Win
-            else:
-                rewards["rew/r_game_win"] = -100.0 # Loss
-            '''
-        
+            # Penalise collecting fuel cause it results in pollution and global warming (final penalty)
+            # AIR POLLUTION - coal > wood > uranium <Assumption>
+            ap = {'coal': 0.75, 'wood': 0.505, 'uranium': 0.25}
+            # EXCAVATION (SECONDARY POLLUTION) -  uranium > coal > wood
+            sp = {'coal': 0.75, 'wood': 0.345, 'uranium': 0.85}
+            rewards["rew/r_fuel_pollution"] = 0
+            #alpha/beta relative weightage of primary vs secondary pollution
+            alpha = 0.65
+            beta = 0.35
+            if is_game_finished:
+                self.is_last_turn = True
+                wood_used = game.stats["teamStats"][self.team]["resourcesCollected"]["wood"]
+                uranium_used = game.stats["teamStats"][self.team]["resourcesCollected"]["uranium"]
+                coal_used = game.stats["teamStats"][self.team]["resourcesCollected"]["coal"]
+                rewards["rew/r_fuel_pollution"] = - (alpha*(wood_used*ap["wood"]+coal_used*ap["coal"]+uranium_used*ap["uranium"]) \
+                                                          + beta*(wood_used*sp["wood"]+coal_used*sp["coal"]+uranium_used*sp["uranium"]))
+
         reward = 0
         for name, value in rewards.items():
             reward += value
