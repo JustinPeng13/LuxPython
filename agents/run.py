@@ -34,7 +34,7 @@ def get_command_line_arguments():
     return args
 
 
-def run_match(args):
+def run_matches(args, num_matches=10):
     print(args)
 
     ALGO = PPO
@@ -45,7 +45,9 @@ def run_match(args):
 
     configs = LuxMatchConfigs_Default
     player = RLAgent(mode="inference", model=model)
+    player.set_team("RLAgent")
     opponent = RuleBasedAgent()
+    opponent.set_team("RuleBasedAgent")
     env = LuxEnvironment(configs=configs,
                          learning_agent=player,
                          opponent_agent=opponent
@@ -53,13 +55,14 @@ def run_match(args):
 
     model.set_env(env)
 
-    run_id = args.id
-    print("Run id %s" % run_id)
-
     env.game.configs["seed"] = random.randint(-10000,10000)
     env.game.start_replay_logging(stateful=True, replay_folder="./replays/", replay_filename_prefix="replay")
-    env.run_no_learn()
-    env.render()
+
+    for i in range(num_matches): # run 5 matches
+        env.game.configs["seed"] = random.randint(-10000,10000)
+        env.run_no_learn()
+        env.render()
+
     env.close()
 
 if __name__ == "__main__":
@@ -76,4 +79,4 @@ if __name__ == "__main__":
     local_args = get_command_line_arguments()
 
     # Run the match
-    run_match(local_args)
+    run_matches(local_args)

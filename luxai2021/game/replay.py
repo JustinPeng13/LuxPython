@@ -22,13 +22,12 @@ class Replay:
         self.file = file
         self.stateful = stateful
         self.clear(game)
-    
-    
+
     def clear(self, game):
         self.data = {
             'seed' : 0,
             'mapType' :  Constants.MAP_TYPES.RANDOM,
-            'teamDetails' : [{"name":"Agent0","tournamentID":""},{"name":"Agent1","tournamentID":""}],
+            'teamDetails' : [{"name":game.agents[0].team, "tournamentID":""}, {"name":game.agents[1].team, "tournamentID":""}],
             'allCommands' : [], # Array<Array<str>>;
             'version' : "3.1.0", #string;
             "results":{"ranks":[{"rank":1,"agentID":0},{"rank":2,"agentID":1}],"replayFile":"replays\\1632799860645_ADAt9Ktkv2za.json"},
