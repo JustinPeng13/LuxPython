@@ -76,6 +76,9 @@ for file in json_files:
     if winner is not None:
         stats[teams[winner]]['win'] += 1
         stats[teams[not winner]]['lose'] += 1
+    else:
+        print("Draw found:", file)
+        assert 0
 
 def to2dp(x):
     return round(x, 2)
@@ -85,11 +88,11 @@ for map_size,stats in sorted(results.items()):
     for k,v in sorted(stats.items()):
         print(k)
         games = v['win'] + v['lose']
-        wr = v['win'] / games
+        wr = v['win'] / games * 100
         print("games:", games)
-        print("winrate:", v['win'] / (v['win'] + v['lose']), "games:", v['win'] + v['lose'])
-        print("mean ending city tiles:", sum(v['cityCells']) / len(v['cityCells']))
-        print('mean max city tiles:', sum(v['max_city_tiles']) / len(v['max_city_tiles']))
-        print("mean max units:", sum(v['max_units']) / len(v['max_units']))
-        print("mean research pts:", sum(v['research']) / len(v['research']))
+        print("winrate:", to2dp(wr))
+        print("mean ending city tiles:", to2dp(sum(v['cityCells']) / len(v['cityCells'])))
+        print('mean max city tiles:', to2dp(sum(v['max_city_tiles']) / len(v['max_city_tiles'])))
+        print("mean max units:", to2dp(sum(v['max_units']) / len(v['max_units'])))
+        print("mean research pts:", to2dp(sum(v['research']) / len(v['research'])))
         print()
