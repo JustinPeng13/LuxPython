@@ -14,8 +14,8 @@ json_files = get_json_file_paths(directory)
 
 results = {}
 
-for file in json_files:
-    with open(file, 'r') as file:
+for filename in json_files:
+    with open(filename, 'r') as file:
         data = json.load(file)
 
     width, height = data['width'], data['height']
