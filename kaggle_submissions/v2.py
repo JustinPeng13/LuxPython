@@ -211,7 +211,7 @@ class AgentPolicy(AgentWithModel):
         #   1x % uranium left
         self.observation_shape = (2 + 8 + 7 * 6 + 8 + 3,)  # total 63
         self.observation_space = spaces.Box(
-            low=0, high=1, shape=self.observation_shape, dtype=float
+            low=0, high=1, shape=self.observation_shape, dtype=np.float32
         )
 
         self.object_nodes = {}
@@ -234,7 +234,6 @@ class AgentPolicy(AgentWithModel):
         """
         Implements getting a observation from the current game for this unit or city
         """
-        observation_index = 0
         if is_new_turn:
             # It's a new turn this event. This flag is set True for only the first observation from each turn.
             # Update any per-turn fixed observation space that doesn't change per unit/city controlled.
@@ -382,7 +381,7 @@ class AgentPolicy(AgentWithModel):
             )
             obs[observation_index + 6] = 1.0 if city.fuel >= fuel_needed_cycle else 0.0
             fuel_needed_total = (
-                city.get_light_upkeep() * (9 - game.state["turn"] // 40 + 1) * 10
+                city.get_light_upkeep() * (8 - game.state["turn"] // 40) * 10
                 + fuel_needed_cycle
             )
             obs[observation_index + 7] = 1.0 if city.fuel >= fuel_needed_total else 0.0
@@ -390,7 +389,7 @@ class AgentPolicy(AgentWithModel):
             observation_index += 8
 
         else:
-            observation_index += 42  # Skip the rest of the unit/city observations
+            observation_index += 50  # Skip the rest of the unit/city observations
 
         if pos:
             for key in [
@@ -449,7 +448,7 @@ class AgentPolicy(AgentWithModel):
                             obs[observation_index + 5] = min(distance / 20.0, 1.0)
 
                             # 0 to 1 value (amount of resource, cargo for unit, or fuel for city)
-                            if key == "city":
+                            if "city" in key:
                                 # City fuel as % of upkeep for 200 turns
                                 c = game.cities[
                                     game.map.get_cell_by_pos(
@@ -625,7 +624,7 @@ class AgentPolicy(AgentWithModel):
         if is_game_error:
             # Game environment step failed, assign a game lost reward to not incentivise this
             print("Game failed due to error")
-            return -10
+            return -100
 
         if not is_new_turn and not is_game_finished:
             # Only apply rewards at the start of each turn or at game end
@@ -641,7 +640,7 @@ class AgentPolicy(AgentWithModel):
             if city.team == self.team:
                 city_count += 1
                 fuel_needed_total = city.get_light_upkeep() * (
-                    9 - game.state["turn"] // 40 + 1
+                    8 - game.state["turn"] // 40
                 ) * 10 + city.get_light_upkeep() * min(10, 40 - game.state["turn"] % 40)
                 if city.fuel >= fuel_needed_total:
                     city_survival_score += len(city.city_cells)
@@ -657,72 +656,53 @@ class AgentPolicy(AgentWithModel):
                 Constants.RESOURCE_TYPES.WOOD
             ]
             / self.total_resources[Constants.RESOURCE_TYPES.WOOD]
-            * 0.6
+            * 0.5
             + game.stats["teamStats"][self.team]["resourcesCollected"][
                 Constants.RESOURCE_TYPES.COAL
             ]
             / self.total_resources[Constants.RESOURCE_TYPES.COAL]
-            * 0.3
-            + game.stats["teamStats"][self.team]["resourcesCollected"][
-                Constants.RESOURCE_TYPES.URANIUM
-            ]
-            / self.total_resources[Constants.RESOURCE_TYPES.URANIUM]
-            * 0.1
+            * 0.5
+            # + game.stats["teamStats"][self.team]["resourcesCollected"][
+            #     Constants.RESOURCE_TYPES.URANIUM
+            # ]
+            # / self.total_resources[Constants.RESOURCE_TYPES.URANIUM]
+            # * 0.0
         )
-
-        # # Give a reward for unit creation/death. 0.05 reward per unit.
-        # rewards["rew/r_units"] = (unit_count - self.units_last) * 0.075
-        # self.units_last = unit_count
-
-        # # Give a reward for city creation/death. 0.1 reward per city.
-        # rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.1
-        # self.city_tiles_last = city_tile_count
-
-        # # Penalty for separate cities
-        # rewards["rew/r_cities"] = (self.cities_last - city_count) * 0.1
-        # self.cities_last = city_count
-
-        # # Reward collecting fuel
-        # fuel_collected = game.stats["teamStats"][self.team]["fuelGenerated"]
-        # rewards["rew/r_fuel_collected"] = (
-        #     fuel_collected - self.fuel_collected_last
-        # ) / 20000
-        # self.fuel_collected_last = fuel_collected
 
         # Give a reward of 1.0 per city tile alive at the end of the game
         rewards["rew/r_city_tiles_end"] = 0
         rewards["rew/r_game_win"] = 0
         if is_game_finished:
             self.is_last_turn = True
-            rewards["rew/r_city_tiles_end"] = (
-                city_tile_count
-                * 2
-                * game.state["turn"]
-                / GAME_CONSTANTS["PARAMETERS"]["MAX_DAYS"]
-            )
+            rewards["rew/r_city_tiles_end"] = city_tile_count * 3
 
             # Example of a game win/loss reward instead
             if game.get_winning_team() == self.team:
-                rewards["rew/r_game_win"] = 0  # Win
+                rewards["rew/r_game_win"] = (
+                    10 * game.state["turn"] / GAME_CONSTANTS["PARAMETERS"]["MAX_DAYS"]
+                )  # Win
             else:
-                rewards["rew/r_game_win"] = -10  # Loss
-
-            if random.random() < 0.015:
+                rewards["rew/r_game_win"] = -10 * (
+                    2 - game.state["turn"] / GAME_CONSTANTS["PARAMETERS"]["MAX_DAYS"]
+                )  # Loss
+            if random.randint(0, 99) < 5:
                 print(
                     f"Game win: {game.get_winning_team() == self.team}\n \
                     Number of rounds: {game.state['turn']}\n \
                     Number of units: {unit_count}\n \
-                      Farming score: {farm_score}\n \
-                        City survival score: {city_survival_score}\n \
-                        City tiles: {city_tile_count} \
-                        City tile score: {rewards['rew/r_city_tiles_end']}"
+                    Farming score: {farm_score * 100}\n \
+                    City survival score: {city_survival_score}\n \
+                    City tiles: {city_tile_count}\n \
+                    City tile score: {rewards['rew/r_city_tiles_end']} \n \
+                    Game win score: {rewards['rew/r_game_win']}\n \
+                    Total score: {farm_score * 100 + city_survival_score + rewards['rew/r_game_win'] + rewards['rew/r_city_tiles_end']}\n"
                 )
 
         # reward = 0
         # for name, value in rewards.items():
         #     reward += value
         curr_score = (
-            farm_score * 10
+            farm_score * 100
             + city_survival_score
             + rewards["rew/r_game_win"]
             + rewards["rew/r_city_tiles_end"]

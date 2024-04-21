@@ -1,9 +1,8 @@
-from stable_baselines3 import PPO  # pip install stable-baselines3
-
 from luxai2021.env.agent import AgentFromStdInOut
 from luxai2021.env.lux_env import LuxEnvironment
 from luxai2021.game.constants import LuxMatchConfigs_Default
-from rliayn import AgentPolicy
+from kaggle_submissions.rba_model import RuleBasedAgent
+from random_agent import RandomAgent
 
 if __name__ == "__main__":
     """
@@ -20,13 +19,14 @@ if __name__ == "__main__":
     #model_id = 5403
     #total_steps = int(48e6)
     #model = PPO.load(f"models/rl_model_{model_id}_{total_steps}_steps.zip")
-    model = PPO.load(f"rliayn5_step10000000.zip")
+    # model = PPO.load(f"v2.zip")
     
     # Create a kaggle-remote opponent agent
     opponent = AgentFromStdInOut()
 
     # Create a RL agent in inference mode
-    player = AgentPolicy(mode="inference", model=model)
+    # player = AgentPolicy(mode="inference", model=model)
+    player = RandomAgent()
 
     # Run the environment
     env = LuxEnvironment(configs, player, opponent)
