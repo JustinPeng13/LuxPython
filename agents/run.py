@@ -13,9 +13,9 @@ from luxai2021.game.constants import LuxMatchConfigs_Default
 from rl_agent.agent import RLAgent
 from rulebased_agent.agent import RuleBasedAgent
 
-def run_matches(num_matches=10):
+def run_matches(num_matches=50):
     configs = LuxMatchConfigs_Default
-    player = RLAgent(mode="inference", model=PPO.load("./models/model6203_step5750000.zip"))
+    player = RLAgent(mode="inference", model=PPO.load("./models/model3878_step10700000.zip"))
     opponent = RuleBasedAgent()
 
     for i in range(num_matches):
