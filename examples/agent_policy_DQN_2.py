@@ -99,7 +99,10 @@ def smart_transfer_to_nearby(game, team, unit_id, unit, target_type_restriction=
     
     return TransferAction(team, unit_id, target_unit_id, resource_type, resource_amount)
 
-class AgentPolicy(AgentWithModel):
+########################################################################################################################
+# This is the Agent that you need to design for the competition
+########################################################################################################################
+class DQN_2_AgentPolicy(AgentWithModel):
     def __init__(self, mode="train", model=None) -> None:
         """
         Arguments:
@@ -525,7 +528,7 @@ class AgentPolicy(AgentWithModel):
         if is_game_error:
             # Game environment step failed, assign a game lost reward to not incentivise this
             print("Game failed due to error")
-            return -10
+            return -1.0
 
         self.game = game
         self.research = game.state["teamStates"][self.team]["researchPoints"]
@@ -555,40 +558,46 @@ class AgentPolicy(AgentWithModel):
         
         rewards = {}
         
-        # Give a reward for unit creation/death. 0.05 reward per unit.
-        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.075
+        # Give a reward for unit creation/death. 0.75 reward per unit.
+        rewards["rew/r_units"] = (unit_count - self.units_last) * 0.33
         self.units_last = unit_count
 
-        # Give a reward for city creation/death. 0.1 reward per city.
-        rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.1
+        # Give a reward for city creation/death. 0.4 reward per city.
+        rewards["rew/r_city_tiles"] = (city_tile_count - self.city_tiles_last) * 0.25
         self.city_tiles_last = city_tile_count
-
-        # Penalty for separate cities
-        rewards["rew/r_cities"] = (self.cities_last - city_count) * 0.2
-        self.cities_last = city_count
 
         # Reward collecting fuel
         fuel_collected = game.stats["teamStats"][self.team]["fuelGenerated"]
-        rewards["rew/r_fuel_collected"] = ( (fuel_collected - self.fuel_collected_last) / 20000 )
+        rewards["rew/r_fuel_collected"] = ( (fuel_collected - self.fuel_collected_last) / 200 )
         self.fuel_collected_last = fuel_collected
 
-        # Penalty for cities with insufficient fuel
-        # rewards["rew/r_city_fuel"] = 0
-        # if not game.is_night():
-        #     urgency = game.state["turn"] % 40 / 30 / 5000
-        #     for city in game.cities.values():
-        #         if city.team == self.team:
-        #             rewards["rew/r_city_fuel"] -= (city.get_light_upkeep() * 11 - city.fuel) * urgency
+        # Balance research against manpower
+        research = game.state["teamStates"][self.team]["researchPoints"]
+        rewards["rew/r_research"] = research*0.033 if research < 50 else (research*0.021 if research < 200 else research*(-0.001))
 
-        # Give a reward of 1.0 per city tile alive at the end of the game
+
+        # Give a reward of 5.0 per city tile alive at the end of the game
         rewards["rew/r_city_tiles_end"] = 0
         if is_game_finished:
             self.is_last_turn = True
-            rewards["rew/r_city_tiles_end"] = city_tile_count * 2 * game.state["turn"] / GAME_CONSTANTS["PARAMETERS"]["MAX_DAYS"]
+            rewards["rew/r_city_tiles_end"] = city_tile_count*5
 
+
+            '''
+            # Example of a game win/loss reward instead
+            if game.get_winning_team() == self.team:
+                rewards["rew/r_game_win"] = 100.0 # Win
+            else:
+                rewards["rew/r_game_win"] = -100.0 # Loss
+            '''
+        
         reward = 0
         for name, value in rewards.items():
             reward += value
 
-        # print("reward", reward)
         return reward
+
+
+
+    
+
