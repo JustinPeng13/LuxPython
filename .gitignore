@@ -9,6 +9,8 @@ personal/
 # Log
 log.txt
 match_errors.txt
+*.json
+*.zip
 
 # Models
 .model
