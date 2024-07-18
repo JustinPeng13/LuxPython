@@ -102,7 +102,7 @@ def smart_transfer_to_nearby(game, team, unit_id, unit, target_type_restriction=
 ########################################################################################################################
 # This is the Agent that you need to design for the competition
 ########################################################################################################################
-class RLAgent(AgentWithModel):
+class PPO2(AgentWithModel):
     def __init__(self, mode, model=None):
         """
         Arguments:

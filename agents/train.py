@@ -13,8 +13,10 @@ from luxai2021.env.agent import Agent
 from luxai2021.env.lux_env import LuxEnvironment, SaveReplayAndModelCallback
 from luxai2021.game.constants import LuxMatchConfigs_Default
 
-from rl_agent.agent import RLAgent
 from rulebased_agent.agent import RuleBasedAgent
+from PPO1.agent import PPO1
+from PPO2.agent import PPO2
+
 
 # https://stable-baselines3.readthedocs.io/en/master/guide/examples.html?highlight=SubprocVecEnv#multiprocessing-unleashing-the-power-of-vectorized-environments
 def make_env(local_env, rank, seed=0):
@@ -72,8 +74,9 @@ def train(args):
     # opponent = Agent()
     opponent = RuleBasedAgent()
 
+    player_class = PPO1
     # Create a RL agent in training mode
-    player = RLAgent(mode="train")
+    player = player_class(mode="train")
 
     # Train the model
     env_eval = None
@@ -83,7 +86,7 @@ def train(args):
                              opponent_agent=opponent)
     else:
         env = SubprocVecEnv([make_env(LuxEnvironment(configs=configs,
-                                                     learning_agent=RLAgent(mode="train"),
+                                                     learning_agent=player_class(mode="train"),
                                                      opponent_agent=RuleBasedAgent()), i) for i in range(args.n_envs)])
     
     run_id = args.id
@@ -122,8 +125,8 @@ def train(args):
             name_prefix=f'model{run_id}',
             replay_env=LuxEnvironment(
                 configs=configs,
-                learning_agent=RLAgent(mode="inference", model=model),
-                opponent_agent=RLAgent(mode="inference", model=model)
+                learning_agent=player_class(mode="inference", model=model),
+                opponent_agent=player_class(mode="inference", model=model)
             ),
             replay_num_episodes=5
         )
@@ -156,8 +159,8 @@ def train(args):
     
     # Learn with self-play against the learned model as an opponent now
     print("Training model with self-play against last version of model...")
-    # player = RLAgent(mode="train")
-    opponent = RLAgent(mode="inference", model=model)
+    # player = player_class(mode="train")
+    opponent = player_class(mode="inference", model=model)
     env = LuxEnvironment(configs, player, opponent)
     model = ALGO(
         algo_policy,
