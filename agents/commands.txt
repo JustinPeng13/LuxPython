@@ -1,0 +1,3 @@
+conda activate lux
+tensorboard --logdir lux_tensorboard
+python train.py

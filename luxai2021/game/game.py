@@ -29,7 +29,7 @@ class Game:
         # Initializations from src/Game/index.ts -> Game()
         self.configs = dict(LuxMatchConfigs_Default) # Shallow copy
         self.configs.update(configs)  # Override default config from specified config
-        self.agents = []
+        self.agents = agents
         self.stop_replay_logging()
         self.reset()
         self.log_file = None
